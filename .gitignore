@@ -1,32 +1,45 @@
-# Prerequisites
-*.d
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Makefile
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Build directory
+build/
+_build/
+build-*/
+_build-*/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Fetched dependencies (if not using system-wide install)
+_deps/
+third_party/ # If FetchContent download dir is configured here
 
-# Compiled Dynamic libraries
+# Executables and libraries
+*.exe
+*.dll
 *.so
 *.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
 *.lib
+clavis # CLI executable name
 
-# Executables
-*.exe
-*.out
-*.app
+# Object files
+*.o
+*.obj
+*.lo
+
+# IDE specific files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific files
+.DS_Store
+Thumbs.db
