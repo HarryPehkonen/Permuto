@@ -1,64 +1,44 @@
 // clavis/src/clavis.cpp
 #include "clavis/clavis.hpp"
 #include "clavis/exceptions.hpp"
+#include "clavis_internal.hpp" // Include the internal header
 
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-#include <set> // For cycle detection
-#include <stack> // Potentially for recursive processing state
+#include <set>
+#include <stack>
+#include <sstream> // For splitting string
 
 namespace clavis {
 
-// Helper function declarations (consider moving to an internal header if complex)
-namespace detail {
-
-// Recursive processing function
-nlohmann::json process_node(
-    const nlohmann::json& node,
-    const nlohmann::json& context,
-    const Options& options,
-    std::set<std::string>& active_paths // For cycle detection
-);
-
-// Function to handle string substitution
-nlohmann::json process_string(
-    const std::string& template_str,
-    const nlohmann::json& context,
-    const Options& options,
-    std::set<std::string>& active_paths
-);
-
-// Function to resolve dot notation path
-const nlohmann::json* resolve_path(
-    const nlohmann::json& context,
-    const std::string& path,
-    const Options& options // Needed for onMissingKey
-    // Potentially add the original full placeholder string for error messages
-);
-
-// Helper to split dot notation string? (or handle within resolve_path)
-
-} // namespace detail
-
 // --- Public API Implementation ---
-
+// (process function remains the same for now)
 nlohmann::json process(
     const nlohmann::json& template_json,
     const nlohmann::json& context,
     const Options& options)
 {
     options.validate(); // Validate options first
-
     std::set<std::string> active_paths; // Initialize cycle detection set
-
     // Start recursive processing from the root of the template
-    return detail::process_node(template_json, context, options, active_paths);
+    // TODO: Eventually call detail::process_node
+    // For now, just return something simple to allow compilation
+     // return detail::process_node(template_json, context, options, active_paths);
+     return template_json; // Temporary return to allow compilation
 }
 
 
 // --- Detail Implementation ---
 namespace detail {
+
+// Forward declaration for process_string
+nlohmann::json process_string(
+    const std::string& template_str,
+    const nlohmann::json& context,
+    const Options& options,
+    std::set<std::string>& active_paths
+);
 
 // Placeholder for the actual recursive logic
 nlohmann::json process_node(
@@ -67,25 +47,22 @@ nlohmann::json process_node(
     const Options& options,
     std::set<std::string>& active_paths)
 {
+    // (Implementation unchanged for now)
     if (node.is_object()) {
         nlohmann::json result_obj = nlohmann::json::object();
         for (auto& [key, val] : node.items()) {
-            // Recursively process the value associated with the key
             result_obj[key] = process_node(val, context, options, active_paths);
         }
         return result_obj;
     } else if (node.is_array()) {
         nlohmann::json result_arr = nlohmann::json::array();
         for (const auto& element : node) {
-            // Recursively process each element in the array
             result_arr.push_back(process_node(element, context, options, active_paths));
         }
         return result_arr;
     } else if (node.is_string()) {
-        // Process strings for variable substitution
         return process_string(node.get<std::string>(), context, options, active_paths);
     } else {
-        // Numbers, booleans, nulls are returned as is
         return node;
     }
 }
@@ -97,61 +74,93 @@ nlohmann::json process_string(
     const Options& options,
     std::set<std::string>& active_paths)
 {
+    // (Implementation unchanged for now)
     // TODO: Implement string scanning and substitution logic here
-    // 1. Check if the entire string is *exactly* one placeholder.
-    //    e.g., template_str == options.variableStartMarker + path + options.variableEndMarker
-    // 2. If exact match:
-    //    a. Extract the path.
-    //    b. Check for cycles using active_paths. Add path, check, remove on exit.
-    //    c. Resolve the path using resolve_path().
-    //    d. If resolved:
-    //       i. If the resolved value is a string, recursively call process_string on it.
-    //       ii. If resolved value is non-string (num, bool, obj, arr, null), return it directly (type preserved).
-    //    e. If not resolved (and onMissingKey=ignore), return the original template_str as a JSON string.
-    // 3. If not exact match (interpolation):
-    //    a. Scan the string for start/end markers.
-    //    b. For each found placeholder:
-    //       i. Extract path.
-    //       ii. Check cycles (as above).
-    //       iii. Resolve path.
-    //       iv. If resolved, convert value to string (json.dump() for obj/arr, "null", "true"/"false", num as string). Recursively process if the resolved value was *itself* a string containing placeholders? Yes, spec implies recursion applies everywhere.
-    //       v. If not resolved (ignore), keep the placeholder text.
-    //    c. Build the final interpolated string.
-    //    d. Return the final string as a JSON string.
+    // Use resolve_path(...)
 
     // TEMPORARY: Return original string until implemented
     return nlohmann::json(template_str);
 }
 
 
-// Placeholder for path resolution logic
+// --- Implementation of resolve_path ---
 const nlohmann::json* resolve_path(
     const nlohmann::json& context,
     const std::string& path,
-    const Options& options)
+    const Options& options,
+    const std::string& full_placeholder_for_error) // Added parameter
 {
-    // TODO: Implement path resolution logic
-    // 1. Split path by '.' into segments.
-    // 2. Traverse context object using segments.
-    // 3. If any intermediate segment is not found OR is not an object when more segments follow:
-    //    a. If options.onMissingKey == Error, throw ClavisMissingKeyException.
-    //    b. If options.onMissingKey == Ignore, return nullptr.
-    // 4. If final segment found, return pointer to the nlohmann::json value.
-    // 5. If final segment not found:
-    //    a. If options.onMissingKey == Error, throw ClavisMissingKeyException.
-    //    b. If options.onMissingKey == Ignore, return nullptr.
-
-    // TEMPORARY: Return nullptr until implemented
-    if (context.contains(path)) {
-        // This only handles top-level, non-dotted paths for now
-         return &context.at(path);
-    } else {
+    if (path.empty()) {
         if (options.onMissingKey == MissingKeyBehavior::Error) {
-             throw ClavisMissingKeyException("Key or path not found (implementation pending)", path);
+            throw ClavisMissingKeyException("Path cannot be empty", full_placeholder_for_error);
         }
         return nullptr;
     }
+
+    if (path[0] == '.' || path.back() == '.' || path.find("..") != std::string::npos) {
+         if (options.onMissingKey == MissingKeyBehavior::Error) {
+            throw ClavisMissingKeyException("Invalid path format (leading/trailing/double dots)", path);
+         }
+         return nullptr;
+    }
+
+    std::vector<std::string> segments;
+    std::stringstream ss(path);
+    std::string segment;
+    while (std::getline(ss, segment, '.')) {
+        if (segment.empty()) { // Should be caught by ".." check above, but defensive
+             if (options.onMissingKey == MissingKeyBehavior::Error) {
+                throw ClavisMissingKeyException("Invalid path format (empty segment)", path);
+             }
+             return nullptr;
+        }
+        segments.push_back(segment);
+    }
+
+    if (segments.empty()) { // Path was just "."? Caught above. Path was empty? Caught above. Safety check.
+        if (options.onMissingKey == MissingKeyBehavior::Error) {
+            throw ClavisMissingKeyException("Path resulted in no segments", path);
+        }
+        return nullptr;
+    }
+
+    const nlohmann::json* current_node = &context;
+    std::string current_path_str; // For error reporting
+
+    for (size_t i = 0; i < segments.size(); ++i) {
+        const std::string& current_segment = segments[i];
+
+        // Append to current path for error messages
+        if (!current_path_str.empty()) current_path_str += ".";
+        current_path_str += current_segment;
+
+        // Check if we can traverse deeper
+        if (!current_node->is_object()) {
+            if (options.onMissingKey == MissingKeyBehavior::Error) {
+                throw ClavisMissingKeyException("Attempted to access key '" + current_segment + "' on a non-object value", current_path_str);
+            }
+            return nullptr;
+        }
+
+        // Check if the key exists
+        if (!current_node->contains(current_segment)) {
+            if (options.onMissingKey == MissingKeyBehavior::Error) {
+                 // Use the full original path in the exception's key_path_ member for consistency?
+                 // Or the path up to the failure point? Let's use the original full path for now.
+                throw ClavisMissingKeyException("Key '" + current_segment + "' not found", path);
+            }
+            return nullptr;
+        }
+
+        // Move to the next node
+        current_node = &(*current_node)[current_segment];
+        // Or: current_node = ¤t_node->at(current_segment); // slightly safer if contains() check failed somehow
+    }
+
+    // If we successfully traversed all segments
+    return current_node;
 }
+
 
 } // namespace detail
 } // namespace clavis
