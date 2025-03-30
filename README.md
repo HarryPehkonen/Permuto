@@ -1,10 +1,10 @@
-# Clavis (C++ Implementation)
+# Permuto (C++ Implementation)
 
-Clavis is a lightweight, flexible C++ library for generating JSON structures by substituting variables from a data context into a valid JSON template. It supports accessing nested data using dot notation and handles type conversions intelligently.
+Permuto is a lightweight, flexible C++ library for generating JSON structures by substituting variables from a data context into a valid JSON template. It supports accessing nested data using dot notation and handles type conversions intelligently.
 
 This C++ implementation uses the popular [nlohmann/json](https://github.com/nlohmann/json) library for JSON handling and is built using CMake.
 
-Inspired by the need to dynamically create JSON payloads, such as those required for various LLM (Large Language Model) APIs, Clavis provides a focused templating mechanism. It is *not* a full programming language but excels at structured JSON generation based on input data.
+Inspired by the need to dynamically create JSON payloads, such as those required for various LLM (Large Language Model) APIs, Permuto provides a focused templating mechanism. It is *not* a full programming language but excels at structured JSON generation based on input data.
 
 ## Features
 
@@ -14,12 +14,12 @@ Inspired by the need to dynamically create JSON payloads, such as those required
 *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${variable}"` or `"${path.to.variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the quotes are effectively removed in the output, preserving the correct JSON type. String data results in a standard JSON string output.
 *   **String Interpolation:** Substitutes variables (including nested ones) within larger strings (e.g., `"Hello, ${user.name}!"`). Non-string values are converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
 *   **Recursive Substitution:** Recursively processes substituted values that themselves contain placeholders.
-*   **Cycle Detection:** Automatically detects and prevents infinite recursion loops caused by cyclical references (e.g., `{"a": "${b}", "b": "${a}"}` or involving paths), throwing a `clavis::ClavisCycleException` instead.
-*   **Configurable Missing Key Handling:** Choose whether to `ignore` missing keys/paths (leaving the placeholder) or `error` out (throwing `clavis::ClavisMissingKeyException`). This applies to top-level keys and keys accessed during path traversal.
+*   **Cycle Detection:** Automatically detects and prevents infinite recursion loops caused by cyclical references (e.g., `{"a": "${b}", "b": "${a}"}` or involving paths), throwing a `permuto::PermutoCycleException` instead.
+*   **Configurable Missing Key Handling:** Choose whether to `ignore` missing keys/paths (leaving the placeholder) or `error` out (throwing `permuto::PermutoMissingKeyException`). This applies to top-level keys and keys accessed during path traversal.
 *   **Customizable Delimiters:** Define custom start (`variableStartMarker`, CLI: `--start`) and end (`variableEndMarker`, CLI: `--end`) markers for variables instead of the default `${` and `}`.
 *   **Modern C++:** Implemented in C++17, using RAII, standard library features, and exceptions for error handling.
 *   **CMake Build System:** Uses CMake for building, testing, and installation. Dependencies (nlohmann/json, GoogleTest) are handled via `FetchContent` if not found locally.
-*   **Command-Line Tool:** Includes a `clavis` CLI tool for easy testing and usage from the command line.
+*   **Command-Line Tool:** Includes a `permuto` CLI tool for easy testing and usage from the command line.
 *   **Testing:** Includes unit tests using GoogleTest.
 *   **Installation Support:** Provides CMake installation targets for easy integration into other projects.
 *   **Permissive License:** Released into the Public Domain (Unlicense).
@@ -35,19 +35,19 @@ Inspired by the need to dynamically create JSON payloads, such as those required
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url> clavis
-    cd clavis
+    git clone <repository-url> permuto
+    cd permuto
     ```
 
 2.  **Configure using CMake:** Create a build directory and run CMake.
     ```bash
     # Create a build directory (standard practice)
-    cmake -S . -B build -DCLAVIS_ENABLE_TESTING=ON
+    cmake -S . -B build -DPERMUTO_ENABLE_TESTING=ON
 
     # Options:
     # -S . : Specifies the source directory (where the root CMakeLists.txt is)
     # -B build : Specifies the build directory (can be any name)
-    # -DCLAVIS_ENABLE_TESTING=ON : Explicitly enable building tests (default is ON)
+    # -DPERMUTO_ENABLE_TESTING=ON : Explicitly enable building tests (default is ON)
     # -DCMAKE_INSTALL_PREFIX=/path/to/install : Optionally set install location
     ```
     CMake will automatically try to find nlohmann/json and GoogleTest using `find_package`. If not found, it will download them using `FetchContent`.
@@ -62,15 +62,15 @@ Inspired by the need to dynamically create JSON payloads, such as those required
 
 This will build:
 
-*   The static library `libclavis-lib.a` (or `clavis-lib.lib`) inside `build/src/`.
-*   The command-line executable `clavis` (or `clavis.exe`) inside `build/cli/`.
-*   The test executable `clavis_tests` (or `clavis_tests.exe`) inside `build/tests/` (if testing is enabled).
+*   The static library `libpermuto-lib.a` (or `permuto-lib.lib`) inside `build/src/`.
+*   The command-line executable `permuto` (or `permuto.exe`) inside `build/cli/`.
+*   The test executable `permuto_tests` (or `permuto_tests.exe`) inside `build/tests/` (if testing is enabled).
 
 ## Testing
 
 The project uses GoogleTest for unit testing.
 
-1.  **Build the project** with tests enabled (ensure `-DCLAVIS_ENABLE_TESTING=ON` was used during CMake configuration).
+1.  **Build the project** with tests enabled (ensure `-DPERMUTO_ENABLE_TESTING=ON` was used during CMake configuration).
 
 2.  **Run the tests** using CTest from the *build* directory:
     ```bash
@@ -79,7 +79,7 @@ The project uses GoogleTest for unit testing.
     ```
     Alternatively, run the test executable directly:
     ```bash
-    ./tests/clavis_tests
+    ./tests/permuto_tests
     ```
     All tests should pass.
 
@@ -99,20 +99,20 @@ You can install the library headers and the compiled library file for use in oth
     # (Note: The prefix in the install command overrides the configure-time prefix)
     ```
     This installs:
-    *   Headers to `<prefix>/include/clavis/`
-    *   Library to `<prefix>/lib/` (`libclavis-lib.a`)
-    *   CMake package configuration files to `<prefix>/share/clavis/cmake/`
-    *   The `clavis` executable to `<prefix>/bin/`
+    *   Headers to `<prefix>/include/permuto/`
+    *   Library to `<prefix>/lib/` (`libpermuto-lib.a`)
+    *   CMake package configuration files to `<prefix>/share/permuto/cmake/`
+    *   The `permuto` executable to `<prefix>/bin/`
 
 ## Usage
 
 ### Library Usage (C++)
 
-Include the necessary headers and call the `clavis::process` function.
+Include the necessary headers and call the `permuto::process` function.
 
 ```c++
-#include <clavis/clavis.hpp>      // Main header for process() and Options
-#include <clavis/exceptions.hpp> // Header for specific exception types
+#include <permuto/permuto.hpp>      // Main header for process() and Options
+#include <permuto/exceptions.hpp> // Header for specific exception types
 #include <nlohmann/json.hpp>     // JSON library
 #include <iostream>
 #include <string>
@@ -155,26 +155,26 @@ int main() {
 
     try {
         // Configure options (optional)
-        clavis::Options options;
-        options.onMissingKey = clavis::MissingKeyBehavior::Ignore; // Default is Ignore
-        // options.onMissingKey = clavis::MissingKeyBehavior::Error;
+        permuto::Options options;
+        options.onMissingKey = permuto::MissingKeyBehavior::Ignore; // Default is Ignore
+        // options.onMissingKey = permuto::MissingKeyBehavior::Error;
         // options.variableStartMarker = "<<";
         // options.variableEndMarker = ">>";
 
         // Perform the substitution
-        json result = clavis::process(template_json, context, options);
+        json result = permuto::process(template_json, context, options);
 
         // Output the result (pretty-printed with 4 spaces)
         std::cout << result.dump(4) << std::endl;
 
-    } catch (const clavis::ClavisMissingKeyException& e) {
+    } catch (const permuto::PermutoMissingKeyException& e) {
         std::cerr << "Error: Missing Key! " << e.what() << " Path: [" << e.get_key_path() << "]" << std::endl;
         return 1;
-    } catch (const clavis::ClavisCycleException& e) {
+    } catch (const permuto::PermutoCycleException& e) {
         std::cerr << "Error: Cycle Detected! " << e.what() << " Cycle: [" << e.get_cycle_path() << "]" << std::endl;
         return 1;
-    } catch (const clavis::ClavisException& e) { // Catch base Clavis exceptions
-        std::cerr << "Clavis Error: " << e.what() << std::endl;
+    } catch (const permuto::PermutoException& e) { // Catch base Permuto exceptions
+        std::cerr << "Permuto Error: " << e.what() << std::endl;
         return 1;
     } catch (const std::invalid_argument& e) { // Catch option validation errors
          std::cerr << "Error: Invalid Options: " << e.what() << std::endl;
@@ -201,14 +201,14 @@ int main() {
 }
 ```
 
-### Command-Line Tool Usage (`clavis`)
+### Command-Line Tool Usage (`permuto`)
 
-The `clavis` executable provides a command-line interface for processing files.
+The `permuto` executable provides a command-line interface for processing files.
 
 **Synopsis:**
 
 ```bash
-clavis <template_file> <context_file> [options]
+permuto <template_file> <context_file> [options]
 ```
 
 **Arguments:**
@@ -245,8 +245,8 @@ Assume `context.json`:
 
 **Command:**
 ```bash
-# Assuming 'clavis' executable is in the PATH or relative path from build dir
-./build/cli/clavis template.json context.json
+# Assuming 'permuto' executable is in the PATH or relative path from build dir
+./build/cli/permuto template.json context.json
 ```
 
 **Output (Pretty-printed JSON to stdout):**
@@ -266,19 +266,19 @@ Assume `template_missing.json`:
 
 **Command:**
 ```bash
-./build/cli/clavis template_missing.json context.json --on-missing-key=error
+./build/cli/permuto template_missing.json context.json --on-missing-key=error
 ```
 
 **Output (Error message to stderr, non-zero exit code):**
 ```
-Clavis Error: Missing Key Error: Key or path not found: missing.key Path: [missing.key]
+Permuto Error: Missing Key Error: Key or path not found: missing.key Path: [missing.key]
 ```
 
 ## Key Concepts & Examples
 
 ### 1. Data Type Handling (Exact Match Substitution)
 
-When a template string value consists *only* of a single placeholder (e.g., `"${var}"`, `"${path.to.val}"`), Clavis substitutes the actual JSON data type found at that path in the context. Quotes around the placeholder in the template are effectively removed for non-string types in the output.
+When a template string value consists *only* of a single placeholder (e.g., `"${var}"`, `"${path.to.val}"`), Permuto substitutes the actual JSON data type found at that path in the context. Quotes around the placeholder in the template are effectively removed for non-string types in the output.
 
 | Template Fragment       | Data Context (`context`)                     | Output Fragment (`result`) | Notes                                     |
 | :---------------------- | :------------------------------------------- | :------------------------- | :---------------------------------------- |
@@ -382,12 +382,12 @@ Configure how unresolved placeholders are treated using the `onMissingKey` optio
 ```
 *(`c` is missing from `a.b`; `x` is missing entirely)*
 
-*   **`clavis::MissingKeyBehavior::Ignore` / `--on-missing-key=ignore` (Default)**
+*   **`permuto::MissingKeyBehavior::Ignore` / `--on-missing-key=ignore` (Default)**
     *   **Output:** `{"value": "${a.b.c}", "another": "${x.y.z}"}`
     *   The placeholder remains untouched if *any* part of the path resolution fails. Useful for multi-pass templating or optional values.
 
-*   **`clavis::MissingKeyBehavior::Error` / `--on-missing-key=error`**
-    *   **Output:** *Throws `clavis::ClavisMissingKeyException` (or prints error and exits for CLI)*
+*   **`permuto::MissingKeyBehavior::Error` / `--on-missing-key=error`**
+    *   **Output:** *Throws `permuto::PermutoMissingKeyException` (or prints error and exits for CLI)*
     *   Processing stops, indicating the first path that could not be fully resolved. The exception contains the unresolved path via `.get_key_path()`.
 
 ### 6. Custom Delimiters
@@ -396,7 +396,7 @@ Change the markers used to identify variables via the `Options` struct or CLI fl
 
 **C++ Configuration:**
 ```c++
-clavis::Options options;
+permuto::Options options;
 options.variableStartMarker = "<<";
 options.variableEndMarker = ">>";
 ```
@@ -424,7 +424,7 @@ options.variableEndMarker = ">>";
 
 ### 7. Cycle Detection
 
-Clavis prevents infinite loops caused by placeholders resolving cyclically, including indirect cycles through multiple lookups.
+Permuto prevents infinite loops caused by placeholders resolving cyclically, including indirect cycles through multiple lookups.
 
 **Template:**
 ```json
@@ -435,81 +435,81 @@ Clavis prevents infinite loops caused by placeholders resolving cyclically, incl
 {"path": {"to": {"b": "${ cycled.back.to.a}" } }, "cycled": {"back": {"to": {"a": "${path.to.b}"}}}}
 ```
 
-**Processing:** Attempting to process this template and data will throw a `clavis::ClavisCycleException`. The exception contains a representation of the detected cycle via `.get_cycle_path()`.
+**Processing:** Attempting to process this template and data will throw a `permuto::PermutoCycleException`. The exception contains a representation of the detected cycle via `.get_cycle_path()`.
 
 ## Configuration Options
 
-These options are passed via the `clavis::Options` struct in C++ or via command-line flags to the CLI tool.
+These options are passed via the `permuto::Options` struct in C++ or via command-line flags to the CLI tool.
 
 | C++ Option Member       | CLI Flag             | Description                                          | Default Value | C++ Type/Enum                  |
 | :---------------------- | :------------------- | :--------------------------------------------------- | :------------ | :----------------------------- |
 | `variableStartMarker` | `--start=<string>`   | The starting delimiter for placeholders.             | `${`          | `std::string`                  |
 | `variableEndMarker`   | `--end=<string>`     | The ending delimiter for placeholders.               | `}`           | `std::string`                  |
-| `onMissingKey`        | `--on-missing-key=`  | Behavior for unresolved placeholders (`ignore`/`error`). | `ignore`      | `clavis::MissingKeyBehavior` |
+| `onMissingKey`        | `--on-missing-key=`  | Behavior for unresolved placeholders (`ignore`/`error`). | `ignore`      | `permuto::MissingKeyBehavior` |
 
 ## C++ API Details
 
-The primary C++ API is defined in `<clavis/clavis.hpp>` and `<clavis/exceptions.hpp>`.
+The primary C++ API is defined in `<permuto/permuto.hpp>` and `<permuto/exceptions.hpp>`.
 
-*   **`clavis::Options` struct:**
+*   **`permuto::Options` struct:**
     *   `std::string variableStartMarker = "${";`
     *   `std::string variableEndMarker = "}";`
-    *   `clavis::MissingKeyBehavior onMissingKey = clavis::MissingKeyBehavior::Ignore;`
+    *   `permuto::MissingKeyBehavior onMissingKey = permuto::MissingKeyBehavior::Ignore;`
     *   `void validate() const;` (Throws `std::invalid_argument` on bad options)
 
-*   **`clavis::MissingKeyBehavior` enum class:**
+*   **`permuto::MissingKeyBehavior` enum class:**
     *   `Ignore`
     *   `Error`
 
-*   **`clavis::process` function:**
+*   **`permuto::process` function:**
     ```c++
     nlohmann::json process(
         const nlohmann::json& template_json,
         const nlohmann::json& context,
-        const clavis::Options& options = {} // Default options used if omitted
+        const permuto::Options& options = {} // Default options used if omitted
     );
     ```
     Takes the template JSON and context JSON, applies substitutions based on options, and returns the resulting JSON. Throws exceptions on errors.
 
-*   **Exception Classes (in `<clavis/exceptions.hpp>`):**
-    *   `clavis::ClavisException` (Base class, inherits `std::runtime_error`)
-    *   `clavis::ClavisParseException` (Currently unused, JSON parsing handled by nlohmann/json upstream)
-    *   `clavis::ClavisCycleException` (Inherits `ClavisException`, provides `const std::string& get_cycle_path() const`)
-    *   `clavis::ClavisMissingKeyException` (Inherits `ClavisException`, provides `const std::string& get_key_path() const`)
-    *   `std::invalid_argument` is thrown by `clavis::process` or `options.validate()` if options are invalid.
+*   **Exception Classes (in `<permuto/exceptions.hpp>`):**
+    *   `permuto::PermutoException` (Base class, inherits `std::runtime_error`)
+    *   `permuto::PermutoParseException` (Currently unused, JSON parsing handled by nlohmann/json upstream)
+    *   `permuto::PermutoCycleException` (Inherits `PermutoException`, provides `const std::string& get_cycle_path() const`)
+    *   `permuto::PermutoMissingKeyException` (Inherits `PermutoException`, provides `const std::string& get_key_path() const`)
+    *   `std::invalid_argument` is thrown by `permuto::process` or `options.validate()` if options are invalid.
 
-## Using Clavis in another CMake Project
+## Using Permuto in another CMake Project
 
-After installing Clavis (using `cmake --install`), you can easily integrate it into your own CMake project using `find_package`.
+After installing Permuto (using `cmake --install`), you can easily integrate it into your own CMake project using `find_package`.
 
 1.  **Update your `CMakeLists.txt`:**
 
     ```cmake
     cmake_minimum_required(VERSION 3.15)
-    project(MyClavisConsumer LANGUAGES CXX)
+    project(MyPermutoConsumer LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
 
-    # Find the installed Clavis package
-    # If you installed Clavis to a custom prefix, you might need to hint CMake:
+    # Find the installed Permuto package
+    # If you installed Permuto to a custom prefix, you might need to hint CMake:
     # list(APPEND CMAKE_PREFIX_PATH "/path/to/custom/install/location")
     # Or set CMAKE_PREFIX_PATH environment variable or CMake argument.
-    find_package(clavis 0.1.0 REQUIRED) # Request version 0.1.0 or compatible newer
+    find_package(permuto 0.1.0 REQUIRED) # Request version 0.1.0 or compatible newer
 
     add_executable(my_app main.cpp)
 
-    # Link against the imported Clavis library target.
+    # Link against the imported Permuto library target.
     # This automatically handles include directories and dependencies (like nlohmann_json).
-    target_link_libraries(my_app PRIVATE Clavis::clavis-lib)
+    target_link_libraries(my_app PRIVATE Permuto::permuto-lib)
     ```
 
 2.  **Include and use in your C++ code:**
 
     ```c++
-    #include <clavis/clavis.hpp>
-    #include <clavis/exceptions.hpp>
+    #include <permuto/permuto.hpp>
+    #include <permuto/exceptions.hpp>
     #include <nlohmann/json.hpp> // You'll need nlohmann::json too
     #include <iostream>
 
@@ -517,10 +517,10 @@ After installing Clavis (using `cmake --install`), you can easily integrate it i
         nlohmann::json template_json = R"({"msg": "Hello, ${name}"})"_json;
         nlohmann::json context = R"({"name": "World from My Project"})"_json;
         try {
-            nlohmann::json result = clavis::process(template_json, context);
+            nlohmann::json result = permuto::process(template_json, context);
             std::cout << result.dump(2) << std::endl;
-        } catch (const clavis::ClavisException& e) {
-            std::cerr << "Clavis Error: " << e.what() << std::endl;
+        } catch (const permuto::PermutoException& e) {
+            std::cerr << "Permuto Error: " << e.what() << std::endl;
             return 1;
         }
         return 0;
