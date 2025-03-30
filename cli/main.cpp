@@ -1,6 +1,6 @@
-// clavis/cli/main.cpp
-#include <clavis/clavis.hpp>
-#include <clavis/exceptions.hpp>
+// permuto/cli/main.cpp
+#include <permuto/permuto.hpp>
+#include <permuto/exceptions.hpp>
 #include <nlohmann/json.hpp>
 
 #include <iostream>
@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     std::string template_filename;
     std::string context_filename;
-    clavis::Options options;
+    permuto::Options options;
     std::vector<std::string> positional_args;
 
     // --- Manual Argument Parsing ---
@@ -41,9 +41,9 @@ int main(int argc, char* argv[]) {
         } else if (arg.rfind("--on-missing-key=", 0) == 0) {
             std::string value = arg.substr(17);
             if (value == "ignore") {
-                options.onMissingKey = clavis::MissingKeyBehavior::Ignore;
+                options.onMissingKey = permuto::MissingKeyBehavior::Ignore;
             } else if (value == "error") {
-                options.onMissingKey = clavis::MissingKeyBehavior::Error;
+                options.onMissingKey = permuto::MissingKeyBehavior::Error;
             } else {
                 std::cerr << "Error: Invalid value for --on-missing-key: " << value << ". Use 'ignore' or 'error'.\n";
                 return EXIT_FAILURE;
@@ -107,17 +107,17 @@ int main(int argc, char* argv[]) {
 
     // --- Process Template ---
     try {
-        nlohmann::json result_json = clavis::process(template_json, context_json, options);
+        nlohmann::json result_json = permuto::process(template_json, context_json, options);
 
         // --- Output Result (Pretty-printed) ---
         std::cout << result_json.dump(4) << std::endl; // Use dump(4) for pretty printing
 
-    } catch (const clavis::ClavisException& e) {
-        std::cerr << "Clavis Error: " << e.what() << std::endl;
+    } catch (const permuto::PermutoException& e) {
+        std::cerr << "Permuto Error: " << e.what() << std::endl;
         // Specific handling if needed:
-        // if (auto cycle_ex = dynamic_cast<const clavis::ClavisCycleException*>(&e)) {
+        // if (auto cycle_ex = dynamic_cast<const permuto::PermutoCycleException*>(&e)) {
         //     std::cerr << "  Cycle detected: " << cycle_ex->get_cycle_path() << std::endl;
-        // } else if (auto missing_ex = dynamic_cast<const clavis::ClavisMissingKeyException*>(&e)) {
+        // } else if (auto missing_ex = dynamic_cast<const permuto::PermutoMissingKeyException*>(&e)) {
         //     std::cerr << "  Missing key/path: " << missing_ex->get_key_path() << std::endl;
         // }
         return EXIT_FAILURE;

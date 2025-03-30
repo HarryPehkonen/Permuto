@@ -1,7 +1,7 @@
-// clavis/src/clavis.cpp
-#include "clavis/clavis.hpp"
-#include "clavis/exceptions.hpp"
-#include "clavis_internal.hpp" // Include the internal header
+// permuto/src/permuto.cpp
+#include "permuto/permuto.hpp"
+#include "permuto/exceptions.hpp"
+#include "permuto_internal.hpp" // Include the internal header
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -10,7 +10,7 @@
 #include <stack>
 #include <sstream> // For splitting string and building interpolated strings
 
-namespace clavis {
+namespace permuto {
 
 // --- Public API Implementation ---
 nlohmann::json process(
@@ -30,7 +30,7 @@ nlohmann::json process(
 // --- Detail Implementation ---
 namespace detail {
 
-// --- Forward Declarations are handled by clavis_internal.hpp ---
+// --- Forward Declarations are handled by permuto_internal.hpp ---
 
 // --- Definition of process_node ---
 nlohmann::json process_node(
@@ -227,7 +227,7 @@ const nlohmann::json* resolve_path(
     // but check defensively.
     if (path.empty()) {
         if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw ClavisMissingKeyException("Path cannot be empty", full_placeholder_for_error);
+            throw PermutoMissingKeyException("Path cannot be empty", full_placeholder_for_error);
         }
         return nullptr;
     }
@@ -235,7 +235,7 @@ const nlohmann::json* resolve_path(
     // Basic validation for path format
     if (path[0] == '.' || path.back() == '.' || path.find("..") != std::string::npos) {
          if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw ClavisMissingKeyException("Invalid path format (leading/trailing/double dots): " + path, full_placeholder_for_error);
+            throw PermutoMissingKeyException("Invalid path format (leading/trailing/double dots): " + path, full_placeholder_for_error);
          }
          return nullptr;
     }
@@ -249,7 +249,7 @@ const nlohmann::json* resolve_path(
         while ((dot_pos = path.find('.', start_pos)) != std::string::npos) {
             std::string segment = path.substr(start_pos, dot_pos - start_pos);
             if (segment.empty()) { // Handled by ".." check mostly, but be sure
-                 throw ClavisMissingKeyException("Invalid path format (empty segment): " + path, full_placeholder_for_error);
+                 throw PermutoMissingKeyException("Invalid path format (empty segment): " + path, full_placeholder_for_error);
             }
             // JSON Pointer needs '~' escaped to '~0' and '/' escaped to '~1'
             std::string escaped_segment;
@@ -264,7 +264,7 @@ const nlohmann::json* resolve_path(
         // Add the last segment
         std::string last_segment = path.substr(start_pos);
          if (last_segment.empty()) { // Trailing dot case
-             throw ClavisMissingKeyException("Invalid path format (trailing dot): " + path, full_placeholder_for_error);
+             throw PermutoMissingKeyException("Invalid path format (trailing dot): " + path, full_placeholder_for_error);
          }
         std::string escaped_last_segment;
          for (char c : last_segment) {
@@ -282,17 +282,17 @@ const nlohmann::json* resolve_path(
     } catch (const nlohmann::json::parse_error& e) {
         // This might happen if our constructed path is bad somehow?
          if (options.onMissingKey == MissingKeyBehavior::Error) {
-             throw ClavisMissingKeyException("Failed to parse generated JSON Pointer for path '" + path + "': " + e.what(), full_placeholder_for_error);
+             throw PermutoMissingKeyException("Failed to parse generated JSON Pointer for path '" + path + "': " + e.what(), full_placeholder_for_error);
          }
          return nullptr;
     } catch (const nlohmann::json::out_of_range& e) {
          // This indicates the path was not found by .at()
          if (options.onMissingKey == MissingKeyBehavior::Error) {
             // Use the original dot-path for user clarity in the exception's path member
-             throw ClavisMissingKeyException("Key or path not found: " + path, path);
+             throw PermutoMissingKeyException("Key or path not found: " + path, path);
          }
          return nullptr;
-    } catch (const ClavisMissingKeyException& e) {
+    } catch (const PermutoMissingKeyException& e) {
         // Re-throw exceptions from format checks if error mode is on
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw;
@@ -307,4 +307,4 @@ const nlohmann::json* resolve_path(
 
 
 } // namespace detail
-} // namespace clavis
+} // namespace permuto

@@ -1,8 +1,8 @@
-# clavis/CMakeLists.txt
+# permuto/CMakeLists.txt
 
 cmake_minimum_required(VERSION 3.15) # Increased for FetchContent best practices
 
-project(clavis LANGUAGES CXX VERSION 0.1.0)
+project(permuto LANGUAGES CXX VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,8 +53,8 @@ add_subdirectory(src)
 add_subdirectory(cli)
 
 # --- Testing ---
-option(CLAVIS_ENABLE_TESTING "Enable building tests" ON)
-if(CLAVIS_ENABLE_TESTING)
+option(PERMUTO_ENABLE_TESTING "Enable building tests" ON)
+if(PERMUTO_ENABLE_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
@@ -65,54 +65,54 @@ endif()
 include(GNUInstallDirs)
 
 # Install the library target (defined in src/CMakeLists.txt)
-install(TARGETS clavis-lib
-    EXPORT ClavisTargets
+install(TARGETS permuto-lib
+    EXPORT PermutoTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} # For shared libs on Windows
 )
 
 # Install the public headers
-install(DIRECTORY include/clavis/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clavis
+install(DIRECTORY include/permuto/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/permuto
     FILES_MATCHING PATTERN "*.hpp"
 )
 
 # Generate and install the CMake package configuration files
-# This allows find_package(clavis) to work for other projects
+# This allows find_package(permuto) to work for other projects
 include(CMakePackageConfigHelpers)
 
-# Generate ClavisConfigVersion.cmake
+# Generate PermutoConfigVersion.cmake
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/ClavisConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY AnyNewerVersion
 )
 
 # Define the install location for the CMake config files
-set(CLAVIS_CMAKE_CONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/clavis/cmake")
+set(PERMUTO_CMAKE_CONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/permuto/cmake")
 
-# Generate ClavisConfig.cmake
+# Generate PermutoConfig.cmake
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ClavisConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/ClavisConfig.cmake"
-    INSTALL_DESTINATION "${CLAVIS_CMAKE_CONFIG_INSTALL_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PermutoConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfig.cmake"
+    INSTALL_DESTINATION "${PERMUTO_CMAKE_CONFIG_INSTALL_DIR}"
 )
 
 # Install the config files
 install(
     FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/ClavisConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/ClavisConfigVersion.cmake"
-    DESTINATION "${CLAVIS_CMAKE_CONFIG_INSTALL_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfigVersion.cmake"
+    DESTINATION "${PERMUTO_CMAKE_CONFIG_INSTALL_DIR}"
 )
 
 # Install the export file (lists installed targets)
 install(
-    EXPORT ClavisTargets
-    FILE ClavisTargets.cmake
-    NAMESPACE Clavis::
-    DESTINATION "${CLAVIS_CMAKE_CONFIG_INSTALL_DIR}"
+    EXPORT PermutoTargets
+    FILE PermutoTargets.cmake
+    NAMESPACE Permuto::
+    DESTINATION "${PERMUTO_CMAKE_CONFIG_INSTALL_DIR}"
 )
 
-message(STATUS "Clavis Config files install path: ${CLAVIS_CMAKE_CONFIG_INSTALL_DIR}")
+message(STATUS "Permuto Config files install path: ${PERMUTO_CMAKE_CONFIG_INSTALL_DIR}")

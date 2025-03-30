@@ -1,6 +1,6 @@
-// src/clavis_internal.hpp
-#ifndef CLAVIS_INTERNAL_HPP
-#define CLAVIS_INTERNAL_HPP
+// src/permuto_internal.hpp
+#ifndef PERMUTO_INTERNAL_HPP
+#define PERMUTO_INTERNAL_HPP
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -8,10 +8,10 @@
 #include <stdexcept> // For guard exception safety
 
 // Include public headers needed for types used in internal functions
-#include "clavis/clavis.hpp" // Brings in Options, MissingKeyBehavior
-#include "clavis/exceptions.hpp" // Brings in exception types
+#include "permuto/permuto.hpp" // Brings in Options, MissingKeyBehavior
+#include "permuto/exceptions.hpp" // Brings in exception types
 
-namespace clavis {
+namespace permuto {
 namespace detail {
 
 // --- Forward Declarations ---
@@ -68,7 +68,7 @@ public:
             // Construct cycle path string for better error reporting (simple version)
             std::string cycle_str = "Path '" + path_ + "' involved in cycle.";
              // Note: Could try to reconstruct a more detailed path by passing the stack.
-            throw ClavisCycleException("Cycle detected during substitution", std::move(cycle_str));
+            throw PermutoCycleException("Cycle detected during substitution", std::move(cycle_str));
         }
         added_ = true; // Mark that we added it
     }
@@ -95,6 +95,6 @@ public:
 
 
 } // namespace detail
-} // namespace clavis
+} // namespace permuto
 
-#endif // CLAVIS_INTERNAL_HPP
+#endif // PERMUTO_INTERNAL_HPP
