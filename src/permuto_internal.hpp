@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <set>
+#include <vector>
 #include <stdexcept> // For guard exception safety
 
 // Include public headers needed for types used in internal functions
@@ -14,7 +15,7 @@
 namespace permuto {
 namespace detail {
 
-// --- Forward Declarations ---
+// --- Forward Declarations for apply() ---
 nlohmann::json process_node(
     const nlohmann::json& node,
     const nlohmann::json& context,
@@ -47,7 +48,31 @@ const nlohmann::json* resolve_path(
 std::string stringify_json(const nlohmann::json& value);
 
 
-// --- RAII Guard for cycle detection ---
+// --- Forward Declarations for Reverse Operations ---
+
+std::string escape_json_pointer_segment(const std::string& segment);
+
+// std::vector<std::string> split_string(const std::string& str, char delimiter); // No longer needed internally? Keep commented for now.
+
+void insert_pointer_at_context_path(
+    nlohmann::json& reverse_template_node,
+    const std::string& context_path,
+    const std::string& pointer_to_insert);
+
+void build_reverse_template_recursive(
+    const nlohmann::json& current_template_node,
+    const std::string& current_result_pointer_str,
+    nlohmann::json& reverse_template_ref, // Modifying this
+    const Options& options);
+
+void reconstruct_context_recursive(
+    const nlohmann::json& current_reverse_node,
+    const nlohmann::json& result_json,
+    nlohmann::json& current_context_node // Modifying this
+);
+
+
+// --- RAII Guard for cycle detection (used by apply()) ---
 class ActivePathGuard {
     std::set<std::string>& active_paths_;
     const std::string& path_;

@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
 
     // --- Process Template ---
     try {
-        nlohmann::json result_json = permuto::process(template_json, context_json, options);
+        nlohmann::json result_json = permuto::apply(template_json, context_json, options);
 
         // --- Output Result (Pretty-printed) ---
         std::cout << result_json.dump(4) << std::endl; // Use dump(4) for pretty printing

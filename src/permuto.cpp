@@ -8,12 +8,15 @@
 #include <vector>
 #include <set>
 #include <stack>
-#include <sstream> // For splitting string and building interpolated strings
+#include <sstream> // For string splitting and building
+#include <stdexcept> // logic_error, runtime_error
+#include <vector> // For splitting context path
 
 namespace permuto {
 
 // --- Public API Implementation ---
-nlohmann::json process(
+
+nlohmann::json apply(
     const nlohmann::json& template_json,
     const nlohmann::json& context,
     const Options& options)
@@ -27,8 +30,255 @@ nlohmann::json process(
 }
 
 
+nlohmann::json create_reverse_template(
+    const nlohmann::json& original_template,
+    const Options& options)
+{
+    options.validate();
+
+    if (options.enableStringInterpolation) {
+        throw std::logic_error("Cannot create a reverse template when string interpolation is enabled in options.");
+    }
+
+    nlohmann::json reverse_template = nlohmann::json::object();
+    std::string initial_pointer_str = ""; // Start with empty pointer string (represents root)
+
+    // Start recursive building process
+    detail::build_reverse_template_recursive(
+        original_template,
+        initial_pointer_str, // Pass pointer string
+        reverse_template,
+        options);
+
+    return reverse_template;
+}
+
+
+nlohmann::json apply_reverse(
+    const nlohmann::json& reverse_template,
+    const nlohmann::json& result_json)
+{
+    nlohmann::json reconstructed_context = nlohmann::json::object();
+
+    // Check if reverse_template is an object before starting
+    if (!reverse_template.is_object()) {
+         // Allow empty object, but not other types like array, string etc.
+        if (!reverse_template.empty()) {
+             throw std::runtime_error("Reverse template root must be a JSON object.");
+        }
+         return reconstructed_context; // Return empty object if reverse template is empty
+    }
+
+
+    detail::reconstruct_context_recursive(
+        reverse_template,
+        result_json,
+        reconstructed_context // Pass the object to be filled
+    );
+
+    return reconstructed_context;
+}
+
+
 // --- Detail Implementation ---
 namespace detail {
+
+// Helper to escape keys for JSON Pointer segments
+// Escapes '~' to '~0' and '/' to '~1' according to RFC 6901
+std::string escape_json_pointer_segment(const std::string& segment) {
+    std::string escaped;
+    // Reserve generously, assuming few escapes needed
+    escaped.reserve(segment.length() + 4);
+    for (char c : segment) {
+        if (c == '~') {
+            escaped += "~0";
+        } else if (c == '/') {
+            escaped += "~1";
+        } else {
+            escaped += c;
+        }
+    }
+    return escaped;
+}
+
+// Helper function to split a string by a delimiter
+// Note: This is NOT used for parsing context paths anymore due to ambiguity with dots in keys.
+// It's kept here in case it's useful elsewhere, but context path handling is revised.
+// std::vector<std::string> split_string(const std::string& str, char delimiter) {
+//     std::vector<std::string> segments;
+//     std::stringstream ss(str);
+//     std::string segment;
+//     while (std::getline(ss, segment, delimiter)) {
+//         segments.push_back(segment);
+//     }
+//     return segments;
+// }
+
+
+// Helper to insert a pointer string into the reverse template structure (REVISED AGAIN)
+// This version correctly handles overwriting primitives/objects.
+// It assumes context_path uses dot notation purely for navigation.
+void insert_pointer_at_context_path(
+    nlohmann::json& reverse_template_node, // Root node to modify
+    const std::string& context_path,
+    const std::string& pointer_to_insert)
+{
+    if (context_path.empty()) {
+        throw std::runtime_error("[Permuto Internal] Invalid empty context path during reverse template creation.");
+    }
+    // Split path by '.' to determine structure
+    std::stringstream ss(context_path);
+    std::string segment;
+    std::vector<std::string> segments;
+    while (std::getline(ss, segment, '.')) {
+        if (segment.empty()) {
+            // Should be caught by resolve_path pre-checks, but defensive.
+            throw std::runtime_error("[Permuto Internal] Invalid context path format (empty segment): " + context_path);
+        }
+        segments.push_back(segment);
+    }
+
+    if (segments.empty()) {
+         throw std::runtime_error("[Permuto Internal] Failed to extract segments from context path: " + context_path);
+    }
+
+    nlohmann::json* current_node = &reverse_template_node;
+
+    for (size_t i = 0; i < segments.size(); ++i) {
+        const std::string& current_segment = segments[i];
+
+        if (i == segments.size() - 1) {
+            // Last segment: assign the pointer string, overwriting whatever was there.
+            (*current_node)[current_segment] = pointer_to_insert;
+        } else {
+            // Not the last segment, ensure an object exists or create/overwrite.
+            if (!current_node->contains(current_segment)) {
+                // Doesn't exist, create an object node.
+                (*current_node)[current_segment] = nlohmann::json::object();
+            } else {
+                 // Exists, ensure it's an object. Overwrite if not.
+                nlohmann::json& existing_node = (*current_node)[current_segment];
+                if (!existing_node.is_object()) {
+                    existing_node = nlohmann::json::object();
+                }
+            }
+            // Descend into the object node.
+            current_node = &(*current_node)[current_segment];
+        }
+    }
+}
+
+
+// --- Definition of build_reverse_template_recursive ---
+void build_reverse_template_recursive(
+    const nlohmann::json& current_template_node,
+    const std::string& current_result_pointer_str, // Pass pointer string
+    nlohmann::json& reverse_template_ref, // Modifying this (root)
+    const Options& options)
+{
+    if (current_template_node.is_object()) {
+        for (auto& [key, val] : current_template_node.items()) {
+            // Build the pointer string for the next level
+            std::string next_pointer_str = current_result_pointer_str + "/" + escape_json_pointer_segment(key);
+            build_reverse_template_recursive(val, next_pointer_str, reverse_template_ref, options);
+        }
+    } else if (current_template_node.is_array()) {
+        for (size_t i = 0; i < current_template_node.size(); ++i) {
+            // Array indices are segments in the pointer string
+             std::string next_pointer_str = current_result_pointer_str + "/" + std::to_string(i);
+            build_reverse_template_recursive(current_template_node[i], next_pointer_str, reverse_template_ref, options);
+        }
+    } else if (current_template_node.is_string()) {
+        // Check if this string is an exact match placeholder
+        const std::string& template_str = current_template_node.get<std::string>();
+        const std::string& startMarker = options.variableStartMarker;
+        const std::string& endMarker = options.variableEndMarker;
+        const size_t startLen = startMarker.length();
+        const size_t endLen = endMarker.length();
+        const size_t templateLen = template_str.length();
+        const size_t minPlaceholderLen = startLen + endLen + 1;
+
+        // Check for exact match structure
+        bool starts_with_marker = (templateLen >= minPlaceholderLen) && (template_str.rfind(startMarker, 0) == 0);
+        bool ends_with_marker = (templateLen >= minPlaceholderLen) && (template_str.find(endMarker, templateLen - endLen) == (templateLen - endLen));
+
+        if (starts_with_marker && ends_with_marker) {
+             // Check for inner markers to ensure *only* one placeholder
+             size_t next_start_pos = template_str.find(startMarker, startLen);
+             bool no_inner_start = (next_start_pos == std::string::npos || next_start_pos >= (templateLen - endLen));
+
+             if (no_inner_start) {
+                 std::string context_path = template_str.substr(startLen, templateLen - startLen - endLen);
+                 // Pre-validate context path before inserting
+                 if (!context_path.empty() &&
+                     context_path.find("..") == std::string::npos &&
+                     context_path[0] != '.' &&
+                     context_path.back() != '.' )
+                 {
+                    // Found a valid exact match! Insert its location.
+                    try {
+                        insert_pointer_at_context_path(reverse_template_ref, context_path, current_result_pointer_str);
+                    } catch (const std::runtime_error& e) {
+                        // Add context to the error message
+                        throw std::runtime_error(std::string("Error building reverse template: ") + e.what());
+                    }
+                 }
+                 // Ignore empty or invalid context paths like "${}", "${.a}", "${a..b}" etc.
+             }
+             // If inner markers found, it's not an exact match, ignore it.
+        }
+        // If not an exact match placeholder, ignore (it's a literal or interpolated string)
+    }
+    // Ignore other types (null, bool, number) in the template
+}
+
+// --- Definition of reconstruct_context_recursive ---
+void reconstruct_context_recursive(
+    const nlohmann::json& current_reverse_node,
+    const nlohmann::json& result_json,
+    nlohmann::json& current_context_node // Modifying this
+    )
+{
+    if (current_reverse_node.is_object()) {
+         // Ensure the target context node is also an object
+         if (!current_context_node.is_object()) {
+              // If it's the initial call (target is likely the empty root object) or
+              // if we are overwriting a previous string pointer, make it an object.
+             current_context_node = nlohmann::json::object();
+         }
+
+        for (auto& [key, val] : current_reverse_node.items()) {
+            // If key doesn't exist, operator[] will create a null node first.
+            // We recursively call, and the recursive call will handle turning that null
+            // into an object or assigning the final value as needed.
+            reconstruct_context_recursive(val, result_json, current_context_node[key]);
+        }
+    } else if (current_reverse_node.is_string()) {
+        // This should be a JSON Pointer string. Look up value in result_json.
+        const std::string& pointer_str = current_reverse_node.get<std::string>();
+        try {
+            // Use the pointer string directly with at()
+            const nlohmann::json& looked_up_value = result_json.at(nlohmann::json::json_pointer(pointer_str));
+
+            // Assign the looked-up value to the current position in the context
+            // This overwrites the intermediate object/null created by operator[] above if necessary.
+            current_context_node = looked_up_value;
+
+        } catch (const nlohmann::json::parse_error& e) {
+            throw std::runtime_error("Invalid JSON Pointer string found in reverse template: '" + pointer_str + "'. Details: " + e.what());
+        } catch (const nlohmann::json::out_of_range& e) {
+            throw std::runtime_error("JSON Pointer '" + pointer_str + "' not found in result JSON. Details: " + e.what());
+        } catch (const std::exception& e) { // Catch potential other errors during lookup/assignment
+             throw std::runtime_error("Error processing pointer '" + pointer_str + "': " + e.what());
+        }
+    } else {
+        // Invalid type found in reverse template structure
+        throw std::runtime_error("Invalid node type encountered in reverse template. Expected object or string (JSON Pointer), found: " + std::string(current_reverse_node.type_name()));
+    }
+}
+
+
+// --- Existing process_node, process_string, resolve_and_process_placeholder, etc. ---
 
 // --- Definition of process_node ---
 nlohmann::json process_node(
@@ -116,19 +366,19 @@ nlohmann::json process_string(
 
     // --- 3. Perform Interpolation (enableStringInterpolation is true) ---
     std::stringstream result_stream;
-    size_t last_pos = 0;
+    size_t current_pos = 0; // Renamed from last_pos for clarity
 
-    while (last_pos < templateLen) {
-        size_t start_pos = template_str.find(startMarker, last_pos);
+    while (current_pos < templateLen) {
+        size_t start_pos = template_str.find(startMarker, current_pos);
 
         if (start_pos == std::string::npos) {
             // No more start markers found, append the rest of the string
-            result_stream << template_str.substr(last_pos);
+            result_stream << template_str.substr(current_pos);
             break; // Exit loop
         }
 
         // Append the literal text between the last placeholder (or start) and this one
-        result_stream << template_str.substr(last_pos, start_pos - last_pos);
+        result_stream << template_str.substr(current_pos, start_pos - current_pos);
 
         size_t end_pos = template_str.find(endMarker, start_pos + startLen);
 
@@ -155,7 +405,7 @@ nlohmann::json process_string(
         }
 
         // Update position to search after the current placeholder
-        last_pos = end_pos + endLen;
+        current_pos = end_pos + endLen;
     }
 
     // Return the final interpolated string as a JSON string value
@@ -209,93 +459,85 @@ std::string stringify_json(const nlohmann::json& value) {
     } else if (value.is_number()) {
         return value.dump(); // Consistent number stringification
     } else if (value.is_structured()) { // Object or Array
-        return value.dump(); // Use compact dump for interpolation
+        // Use compact dump for interpolation: no indent, no spaces, no newlines
+        return value.dump(-1, ' ', false, nlohmann::json::error_handler_t::strict);
     }
     return ""; // Should not happen for valid JSON
 }
 
 
-// --- Definition of resolve_path ---
+// --- Definition of resolve_path (FINAL REVISION) ---
+// Assumes dot notation is purely for navigation. Keys with literal dots cannot be accessed via dot notation.
 const nlohmann::json* resolve_path(
     const nlohmann::json& context,
     const std::string& path,
     const Options& options,
     const std::string& full_placeholder_for_error)
 {
-    // ... (existing implementation is fine) ...
-
-    // Basic validation first
+    // --- Pre-checks for obviously invalid formats ---
     if (path.empty()) {
         if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw PermutoMissingKeyException("Path cannot be empty within placeholder", full_placeholder_for_error);
+            throw PermutoMissingKeyException("Path cannot be empty within placeholder", path);
         }
         return nullptr;
     }
+    // Check for leading dot, trailing dot, or double dot ".."
     if (path[0] == '.' || path.back() == '.' || path.find("..") != std::string::npos) {
-         if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw PermutoMissingKeyException("Invalid path format (leading/trailing/double dots): " + path, full_placeholder_for_error);
-         }
-         return nullptr;
+        if (options.onMissingKey == MissingKeyBehavior::Error) {
+            throw PermutoMissingKeyException("Invalid path format (leading/trailing/double dots): '" + path + "'", path);
+        }
+        return nullptr; // Invalid format, return null if ignoring errors
     }
 
-    // Convert to JSON Pointer
-    try {
-        std::string json_pointer_str = "/";
-        size_t start_pos = 0;
-        size_t dot_pos;
-        while ((dot_pos = path.find('.', start_pos)) != std::string::npos) {
-            std::string segment = path.substr(start_pos, dot_pos - start_pos);
-            if (segment.empty()) { // Should be caught by ".." check, but belt-and-suspenders
-                 if (options.onMissingKey == MissingKeyBehavior::Error) {
-                     throw PermutoMissingKeyException("Invalid path format (empty segment): " + path, full_placeholder_for_error);
-                 }
-                 return nullptr; // Treat as invalid path if ignoring errors
-            }
-            // Escape according to RFC 6901
-            std::string escaped_segment;
-            for (char c : segment) {
-                if (c == '~') escaped_segment += "~0";
-                else if (c == '/') escaped_segment += "~1";
-                else escaped_segment += c;
-            }
-            json_pointer_str += escaped_segment + "/";
-            start_pos = dot_pos + 1;
-        }
-        // Add the last segment
-        std::string last_segment = path.substr(start_pos);
-         if (last_segment.empty()) { // Trailing dot case, should be caught by initial checks
+    // --- Convert dot-path to JSON Pointer string (strictly navigational) ---
+    std::string json_pointer_str;
+    std::stringstream ss(path);
+    std::string segment;
+
+    while (std::getline(ss, segment, '.')) {
+         // Empty segment check (already done by pre-check, but extra safety)
+         if (segment.empty()) {
              if (options.onMissingKey == MissingKeyBehavior::Error) {
-                 throw PermutoMissingKeyException("Invalid path format (trailing dot): " + path, full_placeholder_for_error);
+                 throw PermutoMissingKeyException("Invalid path format (empty segment implies double dots): '" + path + "'", path);
              }
              return nullptr;
          }
-        std::string escaped_last_segment;
-         for (char c : last_segment) {
-             if (c == '~') escaped_last_segment += "~0";
-             else if (c == '/') escaped_last_segment += "~1";
-             else escaped_last_segment += c;
-         }
-        json_pointer_str += escaped_last_segment;
+         json_pointer_str += "/"; // Add separator *before* segment
+         json_pointer_str += escape_json_pointer_segment(segment); // Escape the segment (handles ~ and / within segments)
+    }
+     // Handle case where path was single segment (no dots) - loop doesn't run
+     if (json_pointer_str.empty() && !path.empty()) {
+         json_pointer_str = "/" + escape_json_pointer_segment(path);
+     }
 
 
+    // --- Use the generated pointer string for lookup ---
+    try {
         nlohmann::json::json_pointer ptr(json_pointer_str);
-        const nlohmann::json& result = context.at(ptr); // .at() throws if not found
+        // Use .at() which throws nlohmann::json::out_of_range if not found
+        const nlohmann::json& result = context.at(ptr);
         return &result;
 
     } catch (const nlohmann::json::parse_error& e) {
+         // This implies the generated pointer string was invalid (should be less likely now)
          if (options.onMissingKey == MissingKeyBehavior::Error) {
-             throw PermutoMissingKeyException("Failed to parse generated JSON Pointer for path '" + path + "': " + e.what(), full_placeholder_for_error);
+             throw PermutoMissingKeyException("Failed to parse generated JSON Pointer '" + json_pointer_str + "' for path '" + path + "'. Details: " + e.what(), path);
          }
          return nullptr;
     } catch (const nlohmann::json::out_of_range& e) {
+        // This means the pointer was valid but didn't exist in the context
          if (options.onMissingKey == MissingKeyBehavior::Error) {
-            // Use the original dot-path for user clarity in the exception's path member
-             throw PermutoMissingKeyException("Key or path not found: " + path, path);
+             throw PermutoMissingKeyException("Key or path not found in context: '" + path + "' (Pointer: '" + json_pointer_str + "')", path);
          }
          return nullptr;
-    } catch (const PermutoMissingKeyException& e) { // Catch our own validation exceptions
+    } catch (const PermutoMissingKeyException& e) { // Catch our own validation exceptions if thrown
         if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw;
+            throw; // Rethrow if Error mode
+        }
+        return nullptr; // Ignore otherwise
+    } catch (const std::exception& e) { // Catch other potential errors during lookup
+        if (options.onMissingKey == MissingKeyBehavior::Error) {
+            throw PermutoException("Unexpected error resolving path '" + path + "': " + e.what());
         }
         return nullptr;
     }
