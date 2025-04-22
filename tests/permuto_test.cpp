@@ -37,10 +37,13 @@ protected:
     )"_json;
 
     permuto::Options ignoreOpts; // Default is ignore
+    permuto::Options ignoreInterpolateOpts;
     permuto::Options errorOpts;
 
     void SetUp() override {
         ignoreOpts.onMissingKey = permuto::MissingKeyBehavior::Ignore;
+        ignoreInterpolateOpts.onMissingKey = permuto::MissingKeyBehavior::Ignore;
+        ignoreInterpolateOpts.enableStringInterpolation = true;
         errorOpts.onMissingKey = permuto::MissingKeyBehavior::Error;
     }
 };
@@ -200,12 +203,18 @@ protected:
     )"_json;
 
     permuto::Options ignoreOpts; // Default is ignore
+    permuto::Options ignoreInterpolateOpts;
     permuto::Options errorOpts;
+    permuto::Options errorInterpolateOpts;
     std::set<std::string> active_paths; // Fresh set for each call
 
     void SetUp() override {
         ignoreOpts.onMissingKey = permuto::MissingKeyBehavior::Ignore;
+        ignoreInterpolateOpts.onMissingKey = permuto::MissingKeyBehavior::Ignore;
+        ignoreInterpolateOpts.enableStringInterpolation = true;
         errorOpts.onMissingKey = permuto::MissingKeyBehavior::Error;
+        errorInterpolateOpts.onMissingKey = permuto::MissingKeyBehavior::Error;
+        errorInterpolateOpts.enableStringInterpolation = true;
         active_paths.clear(); // Ensure clean slate for each test
     }
 
@@ -217,6 +226,10 @@ protected:
      // Default to ignoreOpts if not specified
      json process_str(const std::string& tpl) {
         return process_str_opts(tpl, ignoreOpts);
+     }
+
+     json process_interp_str(const std::string& tpl) {
+        return process_str_opts(tpl, ignoreInterpolateOpts);
      }
 
 };
@@ -285,14 +298,14 @@ TEST_F(PermutoProcessStringTests, ExactMatchRecursion) {
 
 TEST_F(PermutoProcessStringTests, ExactMatchRecursionNested) {
      // ${nested_ref} resolves to "User is ${ref}", which interpolates to "User is Alice"
-    json result = process_str("${nested_ref}");
+    json result = process_interp_str("${nested_ref}");
     EXPECT_EQ(result.type(), json::value_t::string);
     EXPECT_EQ(result.get<std::string>(), "User is Alice");
 }
 
 TEST_F(PermutoProcessStringTests, ExactMatchWithInnerMarkersShouldInterpolate) {
     // This looks like an exact match but contains markers, so treat as interpolation
-    json result = process_str("${user.name} has ID ${user.id}"); // Not wrapped in outer literal quotes
+    json result = process_interp_str("${user.name} has ID ${user.id}"); // Not wrapped in outer literal quotes
     EXPECT_EQ(result.type(), json::value_t::string);
     EXPECT_EQ(result.get<std::string>(), "Alice has ID 123");
 }
@@ -314,64 +327,64 @@ TEST_F(PermutoProcessStringTests, ExactMatchResolvesToEmptyPlaceholder) {
 
 // Interpolation Tests
 TEST_F(PermutoProcessStringTests, InterpolationSimple) {
-    json result = process_str("Name: ${user.name}");
+    json result = process_interp_str("Name: ${user.name}");
     EXPECT_EQ(result.type(), json::value_t::string);
     EXPECT_EQ(result.get<std::string>(), "Name: Alice");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationMultiple) {
-    json result = process_str("${user.name} (${user.id})");
+    json result = process_interp_str("${user.name} (${user.id})");
     EXPECT_EQ(result.get<std::string>(), "Alice (123)");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationMixedTypes) {
-    json result = process_str("User: ${user.name}, ID: ${user.id}, Enabled: ${enabled}, Pi: ${pi}, Nada: ${nothing}, Items: ${items}, Cfg: ${config}, Html: ${html}");
+    json result = process_interp_str("User: ${user.name}, ID: ${user.id}, Enabled: ${enabled}, Pi: ${pi}, Nada: ${nothing}, Items: ${items}, Cfg: ${config}, Html: ${html}");
     // Note the stringification of array/object via dump()
     EXPECT_EQ(result.get<std::string>(), "User: Alice, ID: 123, Enabled: true, Pi: 3.14, Nada: null, Items: [1,\"two\"], Cfg: {\"theme\":\"dark\"}, Html: <p>Hello</p>");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationMissingIgnore) {
-    json result = process_str_opts("Val: ${user.name} Missing: ${missing.key} End", ignoreOpts);
+    json result = process_str_opts("Val: ${user.name} Missing: ${missing.key} End", ignoreInterpolateOpts);
     EXPECT_EQ(result.get<std::string>(), "Val: Alice Missing: ${missing.key} End");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationMissingError) {
      EXPECT_THROW({
-        process_str_opts("Val: ${user.name} Missing: ${missing.key} End", errorOpts);
+        process_str_opts("Val: ${user.name} Missing: ${missing.key} End", errorInterpolateOpts);
     }, permuto::PermutoMissingKeyException);
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationWithRecursion) {
     // "User is ${ref}" -> "User is ${user.name}" -> "User is Alice"
-    json result = process_str("Info: ${nested_ref}");
+    json result = process_interp_str("Info: ${nested_ref}");
     EXPECT_EQ(result.get<std::string>(), "Info: User is Alice");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationAdjacent) {
-    json result = process_str("${user.name}${user.id}");
+    json result = process_interp_str("${user.name}${user.id}");
     EXPECT_EQ(result.get<std::string>(), "Alice123");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationOnlyPlaceholders) {
-    json result = process_str("${user.name}:${enabled}");
+    json result = process_interp_str("${user.name}:${enabled}");
      EXPECT_EQ(result.get<std::string>(), "Alice:true");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationUnterminated) {
-     json result = process_str("Hello ${user.name} and ${unclosed");
+     json result = process_interp_str("Hello ${user.name} and ${unclosed");
      EXPECT_EQ(result.get<std::string>(), "Hello Alice and ${unclosed");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationEmptyPlaceholder) {
     // ${} should be treated as literal string "${}" in interpolation context
-    json result = process_str("Value: ${}");
+    json result = process_interp_str("Value: ${}");
     EXPECT_EQ(result.type(), json::value_t::string);
     EXPECT_EQ(result.get<std::string>(), "Value: ${}");
 }
 
 TEST_F(PermutoProcessStringTests, InterpolationResolvesToEmptyPlaceholder) {
     // ${empty_placeholder_ref} resolves to "${}" which should be included literally
-     json result = process_str("Value: ${empty_placeholder_ref} End");
+     json result = process_interp_str("Value: ${empty_placeholder_ref} End");
      EXPECT_EQ(result.type(), json::value_t::string);
      EXPECT_EQ(result.get<std::string>(), "Value: ${} End");
 }
@@ -397,7 +410,7 @@ TEST_F(PermutoProcessStringTests, CycleExactMatch) {
 
 TEST_F(PermutoProcessStringTests, CycleInterpolation) {
      EXPECT_THROW({
-        process_str("Cycle here: ${cycle_a}");
+        process_interp_str("Cycle here: ${cycle_a}");
     }, permuto::PermutoCycleException);
 }
 
@@ -409,7 +422,7 @@ TEST_F(PermutoProcessStringTests, CycleDeepExact) {
 
 TEST_F(PermutoProcessStringTests, CycleDeepInterpolation) {
      EXPECT_THROW({
-        process_str("Deep cycle: ${deep_cycle_a}...");
+        process_interp_str("Deep cycle: ${deep_cycle_a}...");
     }, permuto::PermutoCycleException);
 }
 
@@ -426,6 +439,7 @@ TEST_F(PermutoProcessStringTests, CustomDelimitersInterpolation) {
     permuto::Options opts;
     opts.variableStartMarker = "::";
     opts.variableEndMarker = "::";
+    opts.enableStringInterpolation = true;
     json result = process_str_opts("ID is ::user.id:: Status ::enabled::", opts);
     EXPECT_EQ(result.get<std::string>(), "ID is 123 Status true");
 }
@@ -434,6 +448,7 @@ TEST_F(PermutoProcessStringTests, CustomDelimitersInterpolationAdjacent) {
     permuto::Options opts;
     opts.variableStartMarker = "%%";
     opts.variableEndMarker = "%%";
+    opts.enableStringInterpolation = true;
     json result = process_str_opts("%%user.name%%%%user.id%%", opts);
     EXPECT_EQ(result.get<std::string>(), "Alice123");
 }
@@ -466,7 +481,9 @@ TEST(PermutoBasicTests, SimpleSubstitution) {
         }
     )"_json;
 
-    json result = permuto::process(template_json, context);
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    json result = permuto::process(template_json, context, opts);
     EXPECT_EQ(result, expected);
 }
 
@@ -537,7 +554,9 @@ TEST(PermutoBasicTests, InterpolationTypeConversion) {
         }
     )"_json;
 
-    json result = permuto::process(template_json, context);
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    json result = permuto::process(template_json, context, opts);
     EXPECT_EQ(result, expected);
 }
 
@@ -591,6 +610,7 @@ TEST(PermutoMissingKeyTests, ErrorModeInterpolation) {
 
     permuto::Options options;
     options.onMissingKey = permuto::MissingKeyBehavior::Error;
+    options.enableStringInterpolation = true;
 
     EXPECT_THROW({
         permuto::process(template_json, context, options);
@@ -655,6 +675,7 @@ TEST(PermutoOptionTests, CustomDelimiters) {
     permuto::Options options;
     options.variableStartMarker = "<<";
     options.variableEndMarker = ">>";
+    options.enableStringInterpolation = true;
 
     json result = permuto::process(template_json, context, options);
     EXPECT_EQ(result, expected);
@@ -709,7 +730,9 @@ TEST(PermutoEdgeCases, DelimitersInText) {
     json context = R"( { "this": { "is": "substituted"} } )"_json;
     json expected = R"( { "msg": "This is ${not a var} but substituted", "brackets": "Some { curly } text" } )"_json;
 
-    json result = permuto::process(template_json, context);
+    permuto::Options options;
+    options.enableStringInterpolation = true;
+    json result = permuto::process(template_json, context, options);
     EXPECT_EQ(result, expected);
 }
 
@@ -746,6 +769,8 @@ TEST(PermutoEdgeCases, NestedStructures) {
             }
         }
     )"_json;
-    json result = permuto::process(template_json, context);
+    permuto::Options options;
+    options.enableStringInterpolation = true;
+    json result = permuto::process(template_json, context, options);
     EXPECT_EQ(result, expected);
 }

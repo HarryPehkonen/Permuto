@@ -26,6 +26,7 @@ struct Options {
     std::string variableStartMarker = "${";
     std::string variableEndMarker = "}";
     MissingKeyBehavior onMissingKey = MissingKeyBehavior::Ignore;
+    bool enableStringInterpolation = false;
 
     /**
      * @brief Validates the options. Throws std::invalid_argument on failure.

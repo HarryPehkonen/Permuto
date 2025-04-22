@@ -17,7 +17,9 @@ void print_usage(const char* prog_name) {
               << "  --on-missing-key=<value>  Behavior for missing keys ('ignore' or 'error'. Default: ignore)\n"
               << "  --start=<string>          Variable start delimiter (Default: ${)\n"
               << "  --end=<string>            Variable end delimiter (Default: })\n"
-              << "  --help                    Show this help message\n";
+              << "  --help                    Show this help message\n"
+              << "  --string-interpolation    Enable string interpolation\n"
+    ;
 }
 
 int main(int argc, char* argv[]) {
@@ -35,6 +37,9 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
+        const std::string START_PREFIX = "--start=";
+        const std::string END_PREFIX = "--end=";
+
         if (arg == "--help") {
             print_usage(argv[0]);
             return EXIT_SUCCESS;
@@ -48,10 +53,12 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: Invalid value for --on-missing-key: " << value << ". Use 'ignore' or 'error'.\n";
                 return EXIT_FAILURE;
             }
-        } else if (arg.rfind("--start=", 0) == 0) {
-            options.variableStartMarker = arg.substr(8);
-        } else if (arg.rfind("--end=", 0) == 0) {
-            options.variableEndMarker = arg.substr(6);
+        } else if (arg.rfind(START_PREFIX, 0) == 0) {
+            options.variableStartMarker = arg.substr(START_PREFIX.length());
+        } else if (arg.rfind(END_PREFIX, 0) == 0) {
+            options.variableEndMarker = arg.substr(END_PREFIX.length());
+        } else if (arg == "--string-interpolation") {
+            options.enableStringInterpolation = true;
         } else if (arg.rfind("--", 0) == 0) {
             std::cerr << "Error: Unknown option: " << arg << "\n";
             print_usage(argv[0]);

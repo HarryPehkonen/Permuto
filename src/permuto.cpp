@@ -30,8 +30,6 @@ nlohmann::json process(
 // --- Detail Implementation ---
 namespace detail {
 
-// --- Forward Declarations are handled by permuto_internal.hpp ---
-
 // --- Definition of process_node ---
 nlohmann::json process_node(
     const nlohmann::json& node,
@@ -55,7 +53,7 @@ nlohmann::json process_node(
         }
         return result_arr;
     } else if (node.is_string()) {
-        // Process strings for variable substitution
+        // Process strings for variable substitution/interpolation
         return process_string(node.get<std::string>(), context, options, active_paths);
     } else {
         // Numbers, booleans, nulls are returned as is
@@ -77,43 +75,46 @@ nlohmann::json process_string(
     const size_t templateLen = template_str.length();
     const size_t minPlaceholderLen = startLen + endLen + 1; // Need at least one char for path
 
-    // Optimization: If string is too short to contain a placeholder, return early
-    if (templateLen < minPlaceholderLen) {
+    // Optimization: If string is too short or lacks start marker, return early
+    if (templateLen < minPlaceholderLen || template_str.find(startMarker) == std::string::npos) {
         return nlohmann::json(template_str);
     }
 
-     // Optimization: If no start marker exists, return early
-    if (template_str.find(startMarker) == std::string::npos) {
-        return nlohmann::json(template_str);
-    }
-
-    // --- 1. Check for Exact Match ---
+    // --- 1. Check for Exact Match Placeholder ---
+    // Does it start with startMarker and end with endMarker?
     bool starts_with_marker = template_str.rfind(startMarker, 0) == 0;
     bool ends_with_marker = template_str.find(endMarker, templateLen - endLen) == (templateLen - endLen);
 
     if (starts_with_marker && ends_with_marker)
     {
-        // Check if there are *other* markers inside (to ensure it's *only* one placeholder)
+        // Check if there are *other* markers inside to ensure it's *only* one placeholder
         size_t next_start_pos = template_str.find(startMarker, startLen);
-        // Ensure next start marker is not found OR it's after where the end marker should start
         bool no_inner_start = (next_start_pos == std::string::npos || next_start_pos >= (templateLen - endLen));
-
-        // No need to check inner end marker explicitly if no_inner_start is true and it ends with marker
 
         if (no_inner_start) {
              std::string path = template_str.substr(startLen, templateLen - startLen - endLen);
              // Path cannot be empty for a valid placeholder
              if (!path.empty()) {
-                 // Directly call the helper. It handles cycles, resolution, recursion.
+                 // This is an exact match. Resolve it directly.
+                 // This works correctly for both interpolation modes (enabled/disabled)
+                 // because recursion within resolve_and_process_placeholder respects options.
                  return resolve_and_process_placeholder(path, template_str, context, options, active_paths);
              }
-             // If path is empty "${}", treat as literal string below
+             // If path is empty "${}", it's not a valid placeholder for resolution.
+             // Fall through to treat as literal or potential interpolation.
         }
-        // If inner markers found or path was empty, fall through to interpolation logic
+        // If inner markers were found, it's not an exact match, fall through.
     }
 
+    // --- 2. Handle based on Interpolation Option ---
+    // If we reached here, the string was NOT an exact match placeholder.
 
-    // --- 2. Handle Interpolation ---
+    if (!options.enableStringInterpolation) {
+        // Interpolation is disabled, and it wasn't an exact match. Return the string literally.
+        return nlohmann::json(template_str);
+    }
+
+    // --- 3. Perform Interpolation (enableStringInterpolation is true) ---
     std::stringstream result_stream;
     size_t last_pos = 0;
 
@@ -145,9 +146,11 @@ nlohmann::json process_string(
              // Empty placeholder "${}", treat as literal
              result_stream << full_placeholder;
         } else {
-            // Resolve, handle cycles/recursion using the helper
+            // Resolve the placeholder. resolve_and_process_placeholder handles
+            // cycles, missing keys, and potential recursion (respecting options).
             nlohmann::json resolved_json = resolve_and_process_placeholder(path, full_placeholder, context, options, active_paths);
-            // Stringify the result for interpolation
+
+            // Stringify the resolved JSON value for interpolation into the stream.
             result_stream << stringify_json(resolved_json);
         }
 
@@ -168,18 +171,18 @@ nlohmann::json resolve_and_process_placeholder(
     const Options& options,
     std::set<std::string>& active_paths)
 {
-    // --- Cycle Detection & Path Resolution ---
     ActivePathGuard path_guard(active_paths, path); // Throws on cycle
 
     const nlohmann::json* resolved_ptr = resolve_path(context, path, options, full_placeholder);
 
-    // --- Handle Result ---
     if (resolved_ptr) {
         const nlohmann::json& resolved_value = *resolved_ptr;
 
-        // --- Handle Recursion for String Results ---
+        // If the resolved value is itself a string, it might contain more placeholders.
+        // Recursively process it *using the current options* (which respects enableStringInterpolation).
         if (resolved_value.is_string()) {
-            // Recursively process the *resolved string* using the same active_paths
+            // The recursive call here correctly handles the interpolation mode.
+            // If interpolation is disabled, it will only process exact matches within the resolved string.
             return process_string(resolved_value.get<std::string>(), context, options, active_paths);
         } else {
             // For non-strings (null, bool, num, obj, arr), return the value directly.
@@ -188,7 +191,7 @@ nlohmann::json resolve_and_process_placeholder(
             return resolved_value;
         }
     } else {
-        // Not found (and onMissingKey == Ignore, because Error would have thrown in resolve_path)
+        // Not found (and onMissingKey == Ignore)
         // Return the original placeholder string itself, wrapped in a JSON value.
         return nlohmann::json(full_placeholder);
     }
@@ -198,21 +201,17 @@ nlohmann::json resolve_and_process_placeholder(
 // --- Definition of stringify_json ---
 std::string stringify_json(const nlohmann::json& value) {
     if (value.is_string()) {
-        // String value itself needs to be returned
-        return value.get<std::string>();
+        return value.get<std::string>(); // Already a string
     } else if (value.is_null()) {
         return "null";
     } else if (value.is_boolean()) {
         return value.get<bool>() ? "true" : "false";
     } else if (value.is_number()) {
-        // Dump numbers to string to handle floats/ints consistently
-        return value.dump();
+        return value.dump(); // Consistent number stringification
     } else if (value.is_structured()) { // Object or Array
-        // Use compact dump for interpolation
-        return value.dump();
+        return value.dump(); // Use compact dump for interpolation
     }
-    // Should not happen for valid JSON types passed in
-    return ""; // Or throw?
+    return ""; // Should not happen for valid JSON
 }
 
 
@@ -221,18 +220,17 @@ const nlohmann::json* resolve_path(
     const nlohmann::json& context,
     const std::string& path,
     const Options& options,
-    const std::string& full_placeholder_for_error) // Use this in error messages
+    const std::string& full_placeholder_for_error)
 {
-    // Path should not be empty if called from resolve_and_process_placeholder,
-    // but check defensively.
+    // ... (existing implementation is fine) ...
+
+    // Basic validation first
     if (path.empty()) {
         if (options.onMissingKey == MissingKeyBehavior::Error) {
-            throw PermutoMissingKeyException("Path cannot be empty", full_placeholder_for_error);
+            throw PermutoMissingKeyException("Path cannot be empty within placeholder", full_placeholder_for_error);
         }
         return nullptr;
     }
-
-    // Basic validation for path format
     if (path[0] == '.' || path.back() == '.' || path.find("..") != std::string::npos) {
          if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw PermutoMissingKeyException("Invalid path format (leading/trailing/double dots): " + path, full_placeholder_for_error);
@@ -240,18 +238,20 @@ const nlohmann::json* resolve_path(
          return nullptr;
     }
 
-    // Use nlohmann::json::json_pointer for robust parsing and traversal
-    // Need to prepend '/' and replace '.' with '/'
+    // Convert to JSON Pointer
     try {
         std::string json_pointer_str = "/";
         size_t start_pos = 0;
         size_t dot_pos;
         while ((dot_pos = path.find('.', start_pos)) != std::string::npos) {
             std::string segment = path.substr(start_pos, dot_pos - start_pos);
-            if (segment.empty()) { // Handled by ".." check mostly, but be sure
-                 throw PermutoMissingKeyException("Invalid path format (empty segment): " + path, full_placeholder_for_error);
+            if (segment.empty()) { // Should be caught by ".." check, but belt-and-suspenders
+                 if (options.onMissingKey == MissingKeyBehavior::Error) {
+                     throw PermutoMissingKeyException("Invalid path format (empty segment): " + path, full_placeholder_for_error);
+                 }
+                 return nullptr; // Treat as invalid path if ignoring errors
             }
-            // JSON Pointer needs '~' escaped to '~0' and '/' escaped to '~1'
+            // Escape according to RFC 6901
             std::string escaped_segment;
             for (char c : segment) {
                 if (c == '~') escaped_segment += "~0";
@@ -263,8 +263,11 @@ const nlohmann::json* resolve_path(
         }
         // Add the last segment
         std::string last_segment = path.substr(start_pos);
-         if (last_segment.empty()) { // Trailing dot case
-             throw PermutoMissingKeyException("Invalid path format (trailing dot): " + path, full_placeholder_for_error);
+         if (last_segment.empty()) { // Trailing dot case, should be caught by initial checks
+             if (options.onMissingKey == MissingKeyBehavior::Error) {
+                 throw PermutoMissingKeyException("Invalid path format (trailing dot): " + path, full_placeholder_for_error);
+             }
+             return nullptr;
          }
         std::string escaped_last_segment;
          for (char c : last_segment) {
@@ -280,29 +283,22 @@ const nlohmann::json* resolve_path(
         return &result;
 
     } catch (const nlohmann::json::parse_error& e) {
-        // This might happen if our constructed path is bad somehow?
          if (options.onMissingKey == MissingKeyBehavior::Error) {
              throw PermutoMissingKeyException("Failed to parse generated JSON Pointer for path '" + path + "': " + e.what(), full_placeholder_for_error);
          }
          return nullptr;
     } catch (const nlohmann::json::out_of_range& e) {
-         // This indicates the path was not found by .at()
          if (options.onMissingKey == MissingKeyBehavior::Error) {
             // Use the original dot-path for user clarity in the exception's path member
              throw PermutoMissingKeyException("Key or path not found: " + path, path);
          }
          return nullptr;
-    } catch (const PermutoMissingKeyException& e) {
-        // Re-throw exceptions from format checks if error mode is on
+    } catch (const PermutoMissingKeyException& e) { // Catch our own validation exceptions
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw;
         }
         return nullptr;
     }
-
-    // Catch all for unexpected issues during resolution?
-    // Should be covered by above catches.
-    // return nullptr; // Failsafe
 }
 
 
