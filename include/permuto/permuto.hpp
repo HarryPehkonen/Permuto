@@ -29,7 +29,6 @@ struct Options {
     std::string variableStartMarker = "${";
     std::string variableEndMarker = "}";
     MissingKeyBehavior onMissingKey = MissingKeyBehavior::Ignore;
-    // CHANGED: Default interpolation is now OFF, matching user preference & safer for reverse
     bool enableStringInterpolation = false;
 
     /**

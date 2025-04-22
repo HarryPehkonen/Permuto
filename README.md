@@ -16,8 +16,8 @@ It also supports a **reverse operation** using `create_reverse_template()` and `
         *   **Nested Data Access (Dot Notation):** Access values deep within the data context using dot notation (e.g., `${user.profile.email}`). Array indexing is not supported. Keys containing literal dots (`.`), tildes (`~`), or slashes (`/`) are supported via standard JSON Pointer escaping logic.
         *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${variable}"` or `"${path.to.variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the quotes are effectively removed in the output, preserving the correct JSON type. String data results in a standard JSON string output.
     *   **Optional String Interpolation:** Control whether placeholders within larger strings are processed via `permuto::Options::enableStringInterpolation`.
-        *   **Enabled (Default):** Set `enableStringInterpolation = true` (default) or omit `--no-string-interpolation` in the CLI. Substitutes variables within larger strings (e.g., `"Hello, ${user.name}!"`). Non-string values are converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
-        *   **Disabled:** Set `enableStringInterpolation = false` or use `--no-string-interpolation` in the CLI. Only exact matches are substituted. Strings containing placeholders but not forming an exact match are treated as literals. **Required for reverse operations.**
+        *   **Enabled:** Set `enableStringInterpolation = true` or use `--string-interpolation` in the CLI. Substitutes variables within larger strings (e.g., `"Hello, ${user.name}!"`). Non-string values are converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
+        *   **Disabled:** Leave `enableStringInterpolation = false` (default) or omit `--string-interpolation` in the CLI. Only exact matches are substituted. Strings containing placeholders but not forming an exact match are treated as literals. **Required for reverse operations.**
 *   **Recursive Substitution:** Recursively processes substituted values that themselves contain placeholders during the `apply` operation. The behavior within the resolved string depends on the `enableStringInterpolation` setting.
 *   **Cycle Detection:** Automatically detects and prevents infinite recursion loops during the `apply` operation caused by cyclical references (e.g., `{"a": "${b}", "b": "${a}"}` or involving paths), throwing a `permuto::PermutoCycleException` instead. This works regardless of interpolation mode for lookups that are actually performed.
 *   **Configurable Missing Key Handling:** Choose whether to `ignore` missing keys/paths (`permuto::MissingKeyBehavior::Ignore`, default) or `error` out (`permuto::MissingKeyBehavior::Error`, throwing `permuto::PermutoMissingKeyException`) during `apply`.
@@ -29,7 +29,7 @@ It also supports a **reverse operation** using `create_reverse_template()` and `
 *   **Customizable Delimiters:** Define custom start (`variableStartMarker`, CLI: `--start`) and end (`variableEndMarker`, CLI: `--end`) markers for variables instead of the default `${` and `}`.
 *   **Modern C++:** Implemented in C++17, using RAII, standard library features, and exceptions for error handling.
 *   **CMake Build System:** Uses CMake for building, testing, and installation. Dependencies (nlohmann/json, GoogleTest) are handled via `FetchContent` if not found locally.
-*   **Command-Line Tool:** Includes a `permuto` CLI tool for easy testing and usage from the command line (supports controlling interpolation via `--no-string-interpolation`).
+*   **Command-Line Tool:** Includes a `permuto` CLI tool for easy testing and usage from the command line (supports controlling interpolation via `--string-interpolation`).
 *   **Testing:** Includes a comprehensive suite of unit tests (over 100 tests) using GoogleTest, covering both interpolation modes, reverse operations, edge cases, and error handling.
 *   **Installation Support:** Provides CMake installation targets for easy integration into other projects.
 *   **Permissive License:** Released into the Public Domain (Unlicense).
@@ -140,7 +140,7 @@ You can install the library headers and the compiled library file for use in oth
 
 Include the necessary headers and call the `permuto::apply` function, optionally configuring interpolation and other settings via the `permuto::Options` struct. For reverse operations, use `permuto::create_reverse_template` and `permuto::apply_reverse`.
 
-**Example 1: Interpolation Enabled (Default Behavior)**
+**Example 1: Interpolation Enabled**
 
 ```c++
 #include <permuto/permuto.hpp>      // Main header for apply() and Options
@@ -174,7 +174,7 @@ int main() {
     try {
         // Use default options: enableStringInterpolation = true, onMissingKey = Ignore
         permuto::Options options;
-        // options.enableStringInterpolation = true; // This is the default
+        options.enableStringInterpolation = true;
         // options.onMissingKey = permuto::MissingKeyBehavior::Error;
         // options.variableStartMarker = "<<";
         // options.variableEndMarker = ">>";
@@ -210,7 +210,7 @@ int main() {
 }
 ```
 
-**Example 2: Interpolation Disabled**
+**Example 2: Interpolation Disabled (Default)**
 
 ```c++
 #include <permuto/permuto.hpp>
@@ -228,7 +228,7 @@ int main() {
 
     try {
         permuto::Options options;
-        options.enableStringInterpolation = false; // Disable interpolation
+        // options.enableStringInterpolation = false;
         options.validate();
 
         // Process with Interpolation OFF using apply()
@@ -290,9 +290,9 @@ int main() {
         }
     )"_json;
 
-    // 2. Set Options: Interpolation MUST be disabled
+    // 2. Set Options:
     permuto::Options options;
-    options.enableStringInterpolation = false;
+    // options.enableStringInterpolation = false;
     options.validate();
 
     try {
@@ -390,7 +390,7 @@ permuto <template_file> <context_file> [options]
 **Options:**
 
 *   `--on-missing-key=<value>`: Behavior for missing keys (`ignore` or `error`). Default: `ignore`.
-*   `--no-string-interpolation`: **Disable** string interpolation. If present, non-exact-match strings are treated as literals. If omitted, interpolation is **enabled** (default).
+*   `--string-interpolation`: **Enable** string interpolation. If omitted, non-exact-match strings are treated as literals (default). If present, interpolation is **enabled**.
 *   `--start=<string>`: Set the variable start delimiter (Default: `${`).
 *   `--end=<string>`: Set the variable end delimiter (Default: `}`).
 *   `--help`: Display usage information and exit.
@@ -417,8 +417,8 @@ Assume `context.json`:
 
 **Command:**
 ```bash
-# Interpolation is ON by default
-./build/cli/permuto template.json context.json
+# Interpolation is OFF by default
+./build/cli/permuto template.json context.json --string-interpolation
 ```
 
 **Output (Pretty-printed JSON to stdout):**
@@ -435,8 +435,8 @@ Using the same `template.json` and `context.json`.
 
 **Command:**
 ```bash
-# Add the flag to disable interpolation
-./build/cli/permuto template.json context.json --no-string-interpolation
+# No interpolation by default
+./build/cli/permuto template.json context.json
 ```
 
 **Output (Pretty-printed JSON to stdout):**
@@ -464,7 +464,7 @@ This substitution mechanism applies when a template string value consists *only*
 
 ### 2. String Interpolation (Optional Feature)
 
-This behavior only occurs during `apply` when interpolation is **enabled** (`enableStringInterpolation = true`, the default C++ option, or `--no-string-interpolation` **not** used in CLI).
+This behavior only occurs during `apply` when interpolation is **enabled** (`enableStringInterpolation = true`, or `--string-interpolation` used in CLI).
 
 When a placeholder is part of a larger string *and* interpolation is enabled, the data value found at that path is converted to its string representation and inserted. Non-string types are stringified using their compact JSON representation (`null`, `true`/`false`, numbers, arrays like `[1,true]`, objects like `{"key":"value"}`).
 
@@ -483,13 +483,13 @@ When a placeholder is part of a larger string *and* interpolation is enabled, th
   "settings": {"theme": "dark", "notify": false}
 }
 ```
-**Output (Interpolation Enabled - Default):**
+**Output (Interpolation Enabled):**
 ```json
 {
   "message": "User Alice (ID: 123) is true. Count: null. Settings: {\"notify\":false,\"theme\":\"dark\"}"
 }
 ```
-**Output (Interpolation Disabled - `enableStringInterpolation = false` or `--no-string-interpolation` used):**
+**Output (Interpolation Disabled - default):**
 ```json
 {
   "message": "User ${user.name} (ID: ${user.id}) is ${status.active}. Count: ${data.count}. Settings: ${settings}"
@@ -590,7 +590,7 @@ These options are passed via the `permuto::Options` struct in C++ or via command
 | `variableStartMarker`     | `--start=<string>`          | The starting delimiter for placeholders.                                      | `${`          | `std::string`                  |
 | `variableEndMarker`       | `--end=<string>`            | The ending delimiter for placeholders.                                        | `}`           | `std::string`                  |
 | `onMissingKey`            | `--on-missing-key=`         | Behavior for unresolved placeholders during `apply` (`Ignore`/`Error`).         | `Ignore`      | `permuto::MissingKeyBehavior` |
-| `enableStringInterpolation` | `--no-string-interpolation` | If `true` (default), interpolates variables in non-exact-match strings during `apply`. If `false` (CLI flag present), non-exact-match strings are treated as literals. Reverse operations require `false`. | `true`        | `bool`                         |
+| `enableStringInterpolation` | `--string-interpolation` | If `true`, interpolates variables in non-exact-match strings during `apply`. If `false`, non-exact-match strings are treated as literals. Reverse operations require `false`. | `true`        | `bool`                         |
 
 ## C++ API Details
 
@@ -600,7 +600,7 @@ The primary C++ API is defined in `<permuto/permuto.hpp>` and `<permuto/exceptio
     *   `std::string variableStartMarker = "${";`
     *   `std::string variableEndMarker = "}";`
     *   `permuto::MissingKeyBehavior onMissingKey = permuto::MissingKeyBehavior::Ignore;`
-    *   `bool enableStringInterpolation = true;` *(Default is true)*
+    *   `bool enableStringInterpolation = true;` *(Default is false)*
     *   `void validate() const;` (Throws `std::invalid_argument` on bad options like empty/identical delimiters)
 
 *   **`permuto::MissingKeyBehavior` enum class:**
@@ -624,7 +624,7 @@ The primary C++ API is defined in `<permuto/permuto.hpp>` and `<permuto/exceptio
         const permuto::Options& options = {}
     );
     ```
-    Generates the reverse template mapping. Requires `options.enableStringInterpolation` to be `false`. Throws `std::logic_error` if interpolation is enabled. Throws `std::invalid_argument` if options are invalid.
+    Generates the reverse template mapping. Requires `options.enableStringInterpolation` to be `false` (default). Throws `std::logic_error` if interpolation is enabled. Throws `std::invalid_argument` if options are invalid.
 
 *   **`permuto::apply_reverse` function:**
     ```c++
@@ -675,7 +675,7 @@ After installing Permuto (using `cmake --install`), you can easily integrate it 
         nlohmann::json my_template = /* ... */;
         nlohmann::json my_context = /* ... */;
         permuto::Options opts;
-        opts.enableStringInterpolation = false; // Example: Disable for reverse
+        // opts.enableStringInterpolation = false; // Example: Disable for reverse
         try {
             // Forward operation
             nlohmann::json result = permuto::apply(my_template, my_context, opts);
@@ -685,7 +685,7 @@ After installing Permuto (using `cmake --install`), you can easily integrate it 
             if (!opts.enableStringInterpolation) {
                 nlohmann::json rev_template = permuto::create_reverse_template(my_template, opts);
                 nlohmann::json reconstructed = permuto::apply_reverse(rev_template, result);
-                 std::cout << "Reconstructed: " << reconstructed.dump(2) << std::endl;
+                std::cout << "Reconstructed: " << reconstructed.dump(2) << std::endl;
             }
 
         } catch (const permuto::PermutoException& e) {
@@ -707,6 +707,8 @@ Contributions are welcome! Please adhere to the following guidelines:
 *   Ensure all tests pass (`ctest --output-on-failure` in the build directory).
 *   Consider opening an issue first to discuss significant changes or new features.
 *   Submit changes via Pull Requests.
+*   WebKit-style commit messages are preferred.
+
 
 ## License
 
