@@ -13,10 +13,16 @@ Implementations of Permuto exist or are planned for various programming language
 *   **Valid JSON Templates:** Uses standard, parseable JSON documents as the template input format.
 *   **Variable Substitution (`apply` operation):** Replaces placeholders in a template using values from a context.
     *   **Exact Match:** Replaces placeholders that constitute the *entire* string value (e.g., `"${variable}"`) with values from a provided data context. This works regardless of the string interpolation setting.
-        *   **Nested Data Access (Dot Notation):** Access values deep within the data context using dot notation (e.g., `${user.profile.email}`). Array indexing via dot notation is generally not supported. Implementations should handle keys containing literal dots (`.`), tildes (`~`), or slashes (`/`) according to standard JSON Pointer escaping logic when converting dot notation.
-        *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${variable}"` or `"${path.to.variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the placeholder is replaced by the actual value, preserving the correct JSON type. String data results in a standard JSON string output.
+        *   **Nested Data Access (JSON Pointer - RFC 6901):** Access values using JSON Pointer syntax (e.g., `${/user/profile/email}`). This provides full RFC 6901 compliance:
+            *   Standard paths: `${/user/name}`, `${/settings/theme}`
+            *   Keys with special characters: `${/key~0with~0tilde}`, `${/key~1with~1slash}`  
+            *   Keys with dots: `${/user.name}` accesses a key literally named "user.name"
+            *   Array access: `${/items/0}`, `${/matrix/1/2}`
+            *   Root access: `${}` accesses the entire context (empty path)
+            *   Empty string key: `${/}` accesses a property with an empty string as the key
+        *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${/variable}"` or `"${/path/to/variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the placeholder is replaced by the actual value, preserving the correct JSON type. String data results in a standard JSON string output.
     *   **Optional String Interpolation:** Control whether placeholders within larger strings are processed via a configuration option (e.g., `enableStringInterpolation`).
-        *   **Enabled:** Substitutes variables within larger strings (e.g., `"Hello, ${user.name}!"`). Non-string values are typically converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
+        *   **Enabled:** Substitutes variables within larger strings (e.g., `"Hello, ${/user/name}!"`). Non-string values are typically converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
         *   **Disabled (Often Default):** Only exact matches are substituted. Strings containing placeholders but not forming an exact match are treated as literals. **This mode is required for reverse operations.**
 *   **Recursive Substitution:** Recursively processes substituted values that themselves contain placeholders during the `apply` operation. The behavior within the resolved string depends on the `enableStringInterpolation` setting.
 *   **Cycle Detection:** Automatically detects and prevents infinite recursion loops during the `apply` operation caused by cyclical references (e.g., `{"a": "${b}", "b": "${a}"}` or involving paths), typically throwing a specific cycle error. This works regardless of interpolation mode for lookups that are actually performed.
@@ -60,14 +66,14 @@ These examples use JSON to illustrate the inputs and outputs. The core logic app
 
 This applies when a template string value consists *only* of a single placeholder (`"${...}"`). It works identically whether string interpolation is enabled or disabled during `apply`. Permuto substitutes the actual data type from the context.
 
-| Template Fragment       | Data Context (`context`)                     | Output Fragment (`result`) | Notes                                     |
-| :---------------------- | :------------------------------------------- | :------------------------- | :---------------------------------------- |
-| `"num": "${data.val}"`  | `{"data": {"val": 123}}`                     | `"num": 123`               | Number type preserved.                    |
-| `"bool": "${opts.on}"`  | `{"opts": {"on": true}}`                     | `"bool": true`             | Boolean type preserved.                   |
-| `"arr": "${items.list}"` | `{"items": {"list": [1, "a"]}}`              | `"arr": [1, "a"]`          | Array type preserved.                     |
-| `"obj": "${cfg.sec}"`   | `{"cfg": {"sec": {"k": "v"}}}`              | `"obj": {"k": "v"}`        | Object type preserved.                    |
-| `"null_val": "${maybe}"`| `{"maybe": null}`                            | `"null_val": null`         | Null type preserved.                      |
-| `"str_val": "${msg}"`   | `{"msg": "hello"}`                           | `"str_val": "hello"`       | String type preserved.                    |
+| Template Fragment         | Data Context (`context`)                     | Output Fragment (`result`) | Notes                                     |
+| :------------------------ | :------------------------------------------- | :------------------------- | :---------------------------------------- |
+| `"num": "${/data/val}"`   | `{"data": {"val": 123}}`                     | `"num": 123`               | Number type preserved.                    |
+| `"bool": "${/opts/on}"`   | `{"opts": {"on": true}}`                     | `"bool": true`             | Boolean type preserved.                   |
+| `"arr": "${/items/list}"` | `{"items": {"list": [1, "a"]}}`              | `"arr": [1, "a"]`          | Array type preserved.                     |
+| `"obj": "${/cfg/sec}"`    | `{"cfg": {"sec": {"k": "v"}}}`              | `"obj": {"k": "v"}`        | Object type preserved.                    |
+| `"null_val": "${/maybe}"` | `{"maybe": null}`                            | `"null_val": null`         | Null type preserved.                      |
+| `"str_val": "${/msg}"`    | `{"msg": "hello"}`                           | `"str_val": "hello"`       | String type preserved.                    |
 
 ### 2. String Interpolation (Optional Feature)
 
@@ -78,7 +84,7 @@ When a placeholder is part of a larger string *and* interpolation is enabled, th
 **Template:**
 ```json
 {
-  "message": "User ${user.name} (ID: ${user.id}) is ${status.active}. Count: ${data.count}. Settings: ${settings}"
+  "message": "User ${/user/name} (ID: ${/user/id}) is ${/status/active}. Count: ${/data/count}. Settings: ${/settings}"
 }
 ```
 **Data Context:**
@@ -99,38 +105,41 @@ When a placeholder is part of a larger string *and* interpolation is enabled, th
 **Output (Interpolation Disabled):**
 ```json
 {
-  "message": "User ${user.name} (ID: ${user.id}) is ${status.active}. Count: ${data.count}. Settings: ${settings}"
+  "message": "User ${/user/name} (ID: ${/user/id}) is ${/status/active}. Count: ${/data/count}. Settings: ${/settings}"
 }
 ```
 *(The entire string is treated as a literal because it's not an exact match and interpolation is disabled).*
 
-### 3. Nested Data Access (Dot Notation)
+### 3. Nested Data Access (JSON Pointer)
 
-Use dots (`.`) within placeholders to access nested properties.
+Use JSON Pointer syntax within placeholders to access nested properties, arrays, and keys with special characters.
 
-**Template:** `{"city": "${address.city}", "zip": "${address.postal_code}"}`
+**Template:** `{"city": "${/address/city}", "zip": "${/address/postal_code}"}`
 **Data Context:** `{"address": {"city": "Anytown", "postal_code": "12345"}}`
 **Output (Either Interpolation Mode):** `{"city": "Anytown", "zip": "12345"}`
 
-*   **Path Resolution:** Implementations typically convert dot-paths (`a.b`) to the language's equivalent nested access or internal JSON Pointers (`/a/b`), handling escaping for special characters in keys (`/`, `~`, `.`) automatically based on JSON Pointer rules.
-*   **Keys with Dots/Slashes/Tildes:** Accessing keys like `"user/role"` or `"db~1main"` requires the implementation to correctly parse the dot notation and apply JSON Pointer escaping rules during lookup. Using `${user/role}` should resolve to the pointer `/user~1role`.
-*   **Array Indexing:** Dot notation generally does *not* support array indexing (e.g., `${arr.0}` is usually not interpreted as accessing the first element).
+*   **Path Resolution:** Uses standard JSON Pointer (RFC 6901) syntax.
+*   **Keys with Special Characters:** 
+    *   Keys with slashes: `${/user~1role}` accesses key `"user/role"`
+    *   Keys with tildes: `${/db~0main}` accesses key `"db~main"`
+    *   Keys with dots: `${/user.name}` accesses key `"user.name"` literally
+*   **Array Indexing:** Fully supported: `${/items/0}` accesses the first element of the `items` array.
 
 ### 4. Recursive Substitution
 
 If an exact match during `apply` resolves to a string containing placeholders, that string is recursively processed using the *same* `enableStringInterpolation` setting as the original call.
 
-**Template:** ` { "msg": "${greeting.template}", "info": "${user.details}" } `
-**Data Context:** ` { "greeting": { "template": "Hello, ${user.name}!" }, "user": { "name": "Bob", "details": "${user.name}" } } `
+**Template:** ` { "msg": "${/greeting/template}", "info": "${/user/details}" } `
+**Data Context:** ` { "greeting": { "template": "Hello, ${/user/name}!" }, "user": { "name": "Bob", "details": "${/user/name}" } } `
 
 *   **Output (Interpolation Enabled):**
-    *   `"${greeting.template}"` -> `"Hello, ${user.name}!"` -> (Interpolation applied) -> `"Hello, Bob!"`
-    *   `"${user.details}"` -> `"${user.name}"` -> (Exact Match) -> `"Bob"`
+    *   `"${/greeting/template}"` -> `"Hello, ${/user/name}!"` -> (Interpolation applied) -> `"Hello, Bob!"`
+    *   `"${/user/details}"` -> `"${/user/name}"` -> (Exact Match) -> `"Bob"`
     *   Result: `{ "msg": "Hello, Bob!", "info": "Bob" }`
 *   **Output (Interpolation Disabled):**
-    *   `"${greeting.template}"` -> `"Hello, ${user.name}!"` -> (No interpolation) -> Literal `"Hello, ${user.name}!"`
-    *   `"${user.details}"` -> `"${user.name}"` -> (Exact Match) -> `"Bob"`
-    *   Result: `{ "msg": "Hello, ${user.name}!", "info": "Bob" }`
+    *   `"${/greeting/template}"` -> `"Hello, ${/user/name}!"` -> (No interpolation) -> Literal `"Hello, ${/user/name}!"`
+    *   `"${/user/details}"` -> `"${/user/name}"` -> (Exact Match) -> `"Bob"`
+    *   Result: `{ "msg": "Hello, ${/user/name}!", "info": "Bob" }`
 
 ### 5. Missing Key / Path Handling
 
@@ -141,12 +150,12 @@ Configure behavior using an option like `onMissingKey` (`Ignore` or `Error`).
     *   Triggered by failed lookups for **exact matches** (in both interpolation modes).
     *   Triggered by failed lookups during **interpolation** *only when* `enableStringInterpolation` is `true`. (Lookups aren't attempted for non-exact-match strings when interpolation is disabled).
 
-**Template:** `{"value": "${a.b.c}", "interpolated": "Maybe: ${x.y.z}!"}`
+**Template:** `{"value": "${/a/b/c}", "interpolated": "Maybe: ${/x/y/z}!"}`
 **Data Context:** `{"a": {"b": {}}}` (`c` missing; `x` missing)
 
-*   **`Ignore` Mode Output (Either Interpolation Mode):** `{"value": "${a.b.c}", "interpolated": "Maybe: ${x.y.z}!"}`
-*   **`Error` Mode, Interpolation ON:** Throws exception when `apply` processes `"Maybe: ${x.y.z}!"`.
-*   **`Error` Mode, Interpolation OFF:** Throws exception when `apply` processes `"${a.b.c}"` (exact match lookup fails). Does *not* throw for `"Maybe: ${x.y.z}!"` because interpolation is off, so the lookup isn't attempted.
+*   **`Ignore` Mode Output (Either Interpolation Mode):** `{"value": "${/a/b/c}", "interpolated": "Maybe: ${/x/y/z}!"}`
+*   **`Error` Mode, Interpolation ON:** Throws exception when `apply` processes `"Maybe: ${/x/y/z}!"`.
+*   **`Error` Mode, Interpolation OFF:** Throws exception when `apply` processes `"${/a/b/c}"` (exact match lookup fails). Does *not* throw for `"Maybe: ${/x/y/z}!"` because interpolation is off, so the lookup isn't attempted.
 
 ### 6. Custom Delimiters
 
@@ -154,7 +163,7 @@ Use options like `variableStartMarker` and `variableEndMarker`. Applies in both 
 
 ### 7. Cycle Detection
 
-Detects cycles like `${a}` -> `${b}` -> `${a}` during the resolution phase of `apply`. Throws a specific "cycle" exception. Applies in both interpolation modes for lookups that are actually performed.
+Detects cycles like `${/a}` -> `${/b}` -> `${/a}` during the resolution phase of `apply`. Throws a specific "cycle" exception. Applies in both interpolation modes for lookups that are actually performed.
 
 ### 8. Reverse Template Extraction & Application (Interpolation Disabled Only)
 
@@ -166,7 +175,7 @@ This allows recovery of the original context data if you have the `result_json` 
 
 1.  **Generate Reverse Template:**
     *   Call `create_reverse_template(original_template, options)` where `options.enableStringInterpolation` is `false`.
-    *   This function scans `original_template` for exact-match placeholders (`"${context.path}"`).
+    *   This function scans `original_template` for exact-match placeholders with JSON Pointer paths (`"${/context/path}"`).
     *   It builds a JSON structure mirroring the expected *context*, where leaf values are JSON Pointer strings pointing to the corresponding location in the *result*.
     *   Throws an error if `options.enableStringInterpolation` is `true`.
 
@@ -179,7 +188,7 @@ This allows recovery of the original context data if you have the `result_json` 
 
 **Example (Conceptual):**
 
-*   **Original Template `T`:** `{"output_name": "${user.name}", "ids": ["${sys.id}"]}`
+*   **Original Template `T`:** `{"output_name": "${/user/name}", "ids": ["${/sys/id}"]}`
 *   **Context `C`:** `{"user": {"name": "Alice"}, "sys": {"id": 1}}`
 *   **Options `O`:** `enableStringInterpolation = false`
 *   **Result `R = apply(T, C, O)`:** `{"output_name": "Alice", "ids": [1]}`

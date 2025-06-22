@@ -13,10 +13,16 @@ It also supports a **reverse operation** using `create_reverse_template()` and `
 *   **Valid JSON Templates:** Uses standard, parseable JSON (via nlohmann/json) as the template input format.
 *   **Variable Substitution (`apply`):** Replaces placeholders in a template using values from a context.
     *   **Exact Match:** Replaces placeholders that constitute the *entire* string value (e.g., `"${variable}"`) with values from a provided data context. This works regardless of the string interpolation setting.
-        *   **Nested Data Access (Dot Notation):** Access values deep within the data context using dot notation (e.g., `${user.profile.email}`). Array indexing is not supported. Keys containing literal dots (`.`), tildes (`~`), or slashes (`/`) are supported via standard JSON Pointer escaping logic.
-        *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${variable}"` or `"${path.to.variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the quotes are effectively removed in the output, preserving the correct JSON type. String data results in a standard JSON string output.
+        *   **Nested Data Access (JSON Pointer - RFC 6901):** Access values using JSON Pointer syntax (e.g., `${/user/profile/email}`). This provides full RFC 6901 compliance:
+            *   Standard paths: `${/user/name}`, `${/settings/theme}`
+            *   Keys with special characters: `${/key~0with~0tilde}`, `${/key~1with~1slash}`  
+            *   Keys with dots: `${/user.name}` accesses a key literally named "user.name"
+            *   Array access: `${/items/0}`, `${/matrix/1/2}`
+            *   Root access: `${}` accesses the entire context (empty path)
+            *   Empty string key: `${/}` accesses a property with an empty string as the key
+        *   **Automatic Type Handling:** Intelligently handles data types. When a placeholder like `"${/variable}"` or `"${/path/to/variable}"` is the *entire* string value in the template, and the corresponding data is a number, boolean, array, object, or null, the quotes are effectively removed in the output, preserving the correct JSON type. String data results in a standard JSON string output.
     *   **Optional String Interpolation:** Control whether placeholders within larger strings are processed via `permuto::Options::enableStringInterpolation`.
-        *   **Enabled:** Set `enableStringInterpolation = true` or use `--string-interpolation` in the CLI. Substitutes variables within larger strings (e.g., `"Hello, ${user.name}!"`). Non-string values are converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
+        *   **Enabled:** Set `enableStringInterpolation = true` or use `--string-interpolation` in the CLI. Substitutes variables within larger strings (e.g., `"Hello, ${/user/name}!"`). Non-string values are converted to their compact JSON string representation (`null`, `true`/`false`, numbers, `"[1,2]"`, `{"k":"v"}`).
         *   **Disabled:** Leave `enableStringInterpolation = false` (default) or omit `--string-interpolation` in the CLI. Only exact matches are substituted. Strings containing placeholders but not forming an exact match are treated as literals. **Required for reverse operations.**
 *   **Recursive Substitution:** Recursively processes substituted values that themselves contain placeholders during the `apply` operation. The behavior within the resolved string depends on the `enableStringInterpolation` setting.
 *   **Cycle Detection:** Automatically detects and prevents infinite recursion loops during the `apply` operation caused by cyclical references (e.g., `{"a": "${b}", "b": "${a}"}` or involving paths), throwing a `permuto::PermutoCycleException` instead. This works regardless of interpolation mode for lookups that are actually performed.
@@ -154,12 +160,12 @@ int main() {
 
     json template_json = R"(
         {
-            "user_email": "${user.email}",
-            "greeting": "Welcome, ${user.name}!",
-            "primary_setting": "${settings.primary}",
-            "secondary_enabled": "${settings.secondary.enabled}",
-            "deep_value": "${a.b.c.d}",
-            "maybe_present": "${user.optional_field}"
+            "user_email": "${/user/email}",
+            "greeting": "Welcome, ${/user/name}!",
+            "primary_setting": "${/settings/primary}",
+            "secondary_enabled": "${/settings/secondary/enabled}",
+            "deep_value": "${/a/b/c/d}",
+            "maybe_present": "${/user/optional_field}"
         }
     )"_json;
 
@@ -203,7 +209,7 @@ int main() {
 {
     "deep_value": 12345,
     "greeting": "Welcome, Alice!",
-    "maybe_present": "${user.optional_field}",
+    "maybe_present": "${/user/optional_field}",
     "primary_setting": "ThemeA",
     "secondary_enabled": true,
     "user_email": "alice@example.com"
@@ -222,9 +228,9 @@ int main() {
 
 int main() {
     using json = nlohmann::json;
-    json template_json = R"( {"output_name": "${user.name}", "greeting": "Hello ${user.name}"} )"_json;
+    json template_json = R"( {"output_name": "${/user/name}", "greeting": "Hello ${/user/name}"} )"_json;
     json context = R"( {"user": {"name": "Bob"}} )"_json;
-    json expected_result = R"( {"output_name": "Bob", "greeting": "Hello ${user.name}"} )"_json;
+    json expected_result = R"( {"output_name": "Bob", "greeting": "Hello ${/user/name}"} )"_json;
 
     try {
         permuto::Options options;
@@ -252,7 +258,7 @@ int main() {
 ```json
 --- Result (Interpolation OFF) ---
 {
-    "greeting": "Hello ${user.name}",
+    "greeting": "Hello ${/user/name}",
     "output_name": "Bob"
 }
 
@@ -277,9 +283,9 @@ int main() {
     // 1. Define Template and Context
     json original_template = R"(
         {
-            "userName": "${user.name}",
-            "details": { "isActive": "${user.active}" },
-            "ids": [ "${sys.id}", "${user.id}" ]
+            "userName": "${/user/name}",
+            "details": { "isActive": "${/user/active}" },
+            "ids": [ "${/sys/id}", "${/user/id}" ]
         }
     )"_json;
 
@@ -402,8 +408,8 @@ permuto <template_file> <context_file> [options]
 Assume `template.json`:
 ```json
 {
-  "message": "Hello, ${name}!",
-  "setting": "${config.enabled}"
+  "message": "Hello, ${/name}!",
+  "setting": "${/config/enabled}"
 }
 ```
 
@@ -442,8 +448,8 @@ Using the same `template.json` and `context.json`.
 **Output (Pretty-printed JSON to stdout):**
 ```json
 {
-    "message": "Hello, ${name}!", # Treated as literal because interpolation is off
-    "setting": true               # Exact match still works
+    "message": "Hello, ${/name}!", # Treated as literal because interpolation is off
+    "setting": true                # Exact match still works
 }
 ```
 
@@ -451,16 +457,16 @@ Using the same `template.json` and `context.json`.
 
 ### 1. Data Type Handling (Exact Match Substitution)
 
-This substitution mechanism applies when a template string value consists *only* of a single placeholder (e.g., `"${var}"`, `"${path.to.val}"`). It works identically whether string interpolation is enabled or disabled during `apply`. Permuto substitutes the actual JSON data type found at that path in the context, effectively removing the quotes from the template for non-string types.
+This substitution mechanism applies when a template string value consists *only* of a single placeholder (e.g., `"${/var}"`, `"${/path/to/val}"`). It works identically whether string interpolation is enabled or disabled during `apply`. Permuto substitutes the actual JSON data type found at that path in the context, effectively removing the quotes from the template for non-string types.
 
-| Template Fragment       | Data Context (`context`)                     | Output Fragment (`result`) | Notes                                     |
-| :---------------------- | :------------------------------------------- | :------------------------- | :---------------------------------------- |
-| `"num": "${data.val}"`  | `{"data": {"val": 123}}`                     | `"num": 123`               | Number type preserved.                    |
-| `"bool": "${opts.on}"`  | `{"opts": {"on": true}}`                     | `"bool": true`             | Boolean type preserved.                   |
-| `"arr": "${items.list}"` | `{"items": {"list": [1, "a"]}}`              | `"arr": [1, "a"]`          | Array type preserved.                     |
-| `"obj": "${cfg.sec}"`   | `{"cfg": {"sec": {"k": "v"}}}`              | `"obj": {"k": "v"}`        | Object type preserved.                    |
-| `"null_val": "${maybe}"`| `{"maybe": null}`                            | `"null_val": null`         | Null type preserved.                      |
-| `"str_val": "${msg}"`   | `{"msg": "hello"}`                           | `"str_val": "hello"`       | String type preserved, quotes remain.     |
+| Template Fragment         | Data Context (`context`)                     | Output Fragment (`result`) | Notes                                     |
+| :------------------------ | :------------------------------------------- | :------------------------- | :---------------------------------------- |
+| `"num": "${/data/val}"`   | `{"data": {"val": 123}}`                     | `"num": 123`               | Number type preserved.                    |
+| `"bool": "${/opts/on}"`   | `{"opts": {"on": true}}`                     | `"bool": true`             | Boolean type preserved.                   |
+| `"arr": "${/items/list}"` | `{"items": {"list": [1, "a"]}}`              | `"arr": [1, "a"]`          | Array type preserved.                     |
+| `"obj": "${/cfg/sec}"`    | `{"cfg": {"sec": {"k": "v"}}}`              | `"obj": {"k": "v"}`        | Object type preserved.                    |
+| `"null_val": "${/maybe}"` | `{"maybe": null}`                            | `"null_val": null`         | Null type preserved.                      |
+| `"str_val": "${/msg}"`    | `{"msg": "hello"}`                           | `"str_val": "hello"`       | String type preserved, quotes remain.     |
 
 ### 2. String Interpolation (Optional Feature)
 
@@ -471,7 +477,7 @@ When a placeholder is part of a larger string *and* interpolation is enabled, th
 **Template:**
 ```json
 {
-  "message": "User ${user.name} (ID: ${user.id}) is ${status.active}. Count: ${data.count}. Settings: ${settings}"
+  "message": "User ${/user/name} (ID: ${/user/id}) is ${/status/active}. Count: ${/data/count}. Settings: ${/settings}"
 }
 ```
 **Data:**
@@ -492,38 +498,41 @@ When a placeholder is part of a larger string *and* interpolation is enabled, th
 **Output (Interpolation Disabled - default):**
 ```json
 {
-  "message": "User ${user.name} (ID: ${user.id}) is ${status.active}. Count: ${data.count}. Settings: ${settings}"
+  "message": "User ${/user/name} (ID: ${/user/id}) is ${/status/active}. Count: ${/data/count}. Settings: ${/settings}"
 }
 ```
 *(The entire string is treated as a literal because it's not an exact match and interpolation is disabled).*
 
-### 3. Nested Data Access (Dot Notation)
+### 3. Nested Data Access (JSON Pointer)
 
-Use dots (`.`) within placeholders to access nested properties. This works for exact matches (both modes) and during interpolation (when enabled).
+Use JSON Pointer syntax within placeholders to access nested properties, arrays, and keys with special characters. This works for exact matches (both modes) and during interpolation (when enabled).
 
-**Template:** `{"city": "${address.city}", "zip": "${address.postal_code}"}`
+**Template:** `{"city": "${/address/city}", "zip": "${/address/postal_code}"}`
 **Data:** `{"address": {"city": "Anytown", "postal_code": "12345"}}`
 **Output (Either Mode):** `{"city": "Anytown", "zip": "12345"}`
 
-*   **Path Resolution:** Converts dot-paths (`a.b`) to JSON Pointers (`/a/b`), handling `/` and `~` escaping.
-*   **Keys with Dots:** Access keys like `"user.role"` using `${user.role}`.
-*   **Array Indexing:** Not supported via dot notation (`${arr.0}` won't work).
+*   **Path Resolution:** Uses standard JSON Pointer (RFC 6901) syntax.
+*   **Keys with Special Characters:** 
+    *   Keys with slashes: `${/user~1role}` accesses key `"user/role"`
+    *   Keys with tildes: `${/db~0main}` accesses key `"db~main"`
+    *   Keys with dots: `${/user.name}` accesses key `"user.name"` literally
+*   **Array Indexing:** Fully supported: `${/items/0}` accesses the first element of the `items` array.
 
 ### 4. Recursive Substitution
 
 If an exact match during `apply` resolves to a string containing placeholders, that string is recursively processed using the *same* `enableStringInterpolation` setting.
 
-**Template:** ` { "msg": "${greeting.template}", "info": "${user.details}" } `
-**Data:** ` { "greeting": { "template": "Hello, ${user.name}!" }, "user": { "name": "Bob", "details": "${user.name}" } } `
+**Template:** ` { "msg": "${/greeting/template}", "info": "${/user/details}" } `
+**Data:** ` { "greeting": { "template": "Hello, ${/user/name}!" }, "user": { "name": "Bob", "details": "${/user/name}" } } `
 
 *   **Output (Interpolation Enabled):**
-    *   `"${greeting.template}"` -> `"Hello, ${user.name}!"` -> (Interpolation applied) -> `"Hello, Bob!"`
-    *   `"${user.details}"` -> `"${user.name}"` -> (Exact Match) -> `"Bob"`
+    *   `"${/greeting/template}"` -> `"Hello, ${/user/name}!"` -> (Interpolation applied) -> `"Hello, Bob!"`
+    *   `"${/user/details}"` -> `"${/user/name}"` -> (Exact Match) -> `"Bob"`
     *   Result: `{ "msg": "Hello, Bob!", "info": "Bob" }`
 *   **Output (Interpolation Disabled):**
-    *   `"${greeting.template}"` -> `"Hello, ${user.name}!"` -> (No interpolation) -> Literal `"Hello, ${user.name}!"`
-    *   `"${user.details}"` -> `"${user.name}"` -> (Exact Match) -> `"Bob"`
-    *   Result: `{ "msg": "Hello, ${user.name}!", "info": "Bob" }`
+    *   `"${/greeting/template}"` -> `"Hello, ${/user/name}!"` -> (No interpolation) -> Literal `"Hello, ${/user/name}!"`
+    *   `"${/user/details}"` -> `"${/user/name}"` -> (Exact Match) -> `"Bob"`
+    *   Result: `{ "msg": "Hello, ${/user/name}!", "info": "Bob" }`
 
 ### 5. Missing Key / Path Handling
 
@@ -534,12 +543,12 @@ Use `onMissingKey` (`Ignore` or `Error`) or `--on-missing-key` (`ignore` or `err
     *   Triggered by failed lookups for **exact matches** (in both interpolation modes).
     *   Triggered by failed lookups during **interpolation** *only when* `enableStringInterpolation` is `true`. Lookups are not attempted for non-exact-match strings when interpolation is disabled.
 
-**Template:** `{"value": "${a.b.c}", "interpolated": "Maybe: ${x.y.z}!"}`
+**Template:** `{"value": "${/a/b/c}", "interpolated": "Maybe: ${/x/y/z}!"}`
 **Data:** `{"a": {"b": {}}}` (`c` missing; `x` missing)
 
-*   **`Ignore` Mode Output (Either Interpolation Mode):** `{"value": "${a.b.c}", "interpolated": "Maybe: ${x.y.z}!"}`
-*   **`Error` Mode, Interpolation ON:** Throws exception when `apply` processes `"Maybe: ${x.y.z}!"`.
-*   **`Error` Mode, Interpolation OFF:** Throws exception when `apply` processes `"${a.b.c}"` (exact match). Does *not* throw for `"Maybe: ${x.y.z}!"` because interpolation is off.
+*   **`Ignore` Mode Output (Either Interpolation Mode):** `{"value": "${/a/b/c}", "interpolated": "Maybe: ${/x/y/z}!"}`
+*   **`Error` Mode, Interpolation ON:** Throws exception when `apply` processes `"Maybe: ${/x/y/z}!"`.
+*   **`Error` Mode, Interpolation OFF:** Throws exception when `apply` processes `"${/a/b/c}"` (exact match). Does *not* throw for `"Maybe: ${/x/y/z}!"` because interpolation is off.
 
 ### 6. Custom Delimiters
 
@@ -547,173 +556,8 @@ Use `Options::variableStartMarker`/`EndMarker` or `--start`/`--end`. Applies in 
 
 ### 7. Cycle Detection
 
-Detects cycles like `${a}` -> `${b}` -> `${a}` during the resolution phase of `apply`. Throws `permuto::PermutoCycleException`. Applies in both interpolation modes for lookups that are actually performed.
+Detects cycles like `${/a}` -> `${/b}` -> `${/a}` during the resolution phase of `apply`. Throws `permuto::PermutoCycleException`. Applies in both interpolation modes for lookups that are actually performed.
 
 ### 8. Reverse Template Extraction & Application (Interpolation Disabled Only)
 
-This feature allows you to extract the original context data if you have the `result_json` and the `original_template`, but **only** if the result was generated using `apply()` with `enableStringInterpolation = false`.
-
-**Concept:** The `original_template` defines where context variables *should* appear in the `result_json`. A `reverse_template` is generated that maps the context variable paths to JSON Pointers indicating their location in the `result_json`.
-
-**Process:**
-
-1.  **Generate Reverse Template:**
-    *   Call `permuto::create_reverse_template(original_template, options)` where `options.enableStringInterpolation` is `false`.
-    *   This function scans `original_template` for exact-match placeholders (`"${context.path}"`).
-    *   It builds a JSON structure mirroring the expected *context*, where leaf values are JSON Pointer strings pointing to the corresponding location in the *result*.
-    *   Throws `std::logic_error` if `options.enableStringInterpolation` is `true`.
-
-2.  **Apply Reverse Template:**
-    *   Call `permuto::apply_reverse(reverse_template, result_json)`.
-    *   This function traverses the `reverse_template`.
-    *   For each leaf node (JSON Pointer string), it looks up the value at that pointer location within `result_json`.
-    *   It builds the `reconstructed_context` JSON, placing the extracted values at the correct paths defined by the `reverse_template` structure.
-    *   Throws `std::runtime_error` or `nlohmann::json` exceptions if the reverse template is malformed or pointers don't resolve.
-
-**Example:** (See C++ Example 3 above for a runnable demonstration)
-
-*   **Original Template `T`:** `{"output_name": "${user.name}", "ids": ["${sys.id}"]}`
-*   **Context `C`:** `{"user": {"name": "Alice"}, "sys": {"id": 1}}`
-*   **Options `O`:** `enableStringInterpolation = false`
-*   **Result `R = apply(T, C, O)`:** `{"output_name": "Alice", "ids": [1]}`
-*   **Reverse Template `RT = create_reverse_template(T, O)`:** `{"user": {"name": "/output_name"}, "sys": {"id": "/ids/0"}}`
-*   **Reconstructed Context `C_new = apply_reverse(RT, R)`:** `{"user": {"name": "Alice"}, "sys": {"id": 1}}` (Matches `C`)
-
-**Limitations:** This extraction only works if interpolation was disabled during the original `apply()` call and only recovers context variables referenced by exact-match placeholders in the template. Any context data not used in an exact-match placeholder in the original template cannot be recovered.
-
-## Configuration Options
-
-These options are passed via the `permuto::Options` struct in C++ or via command-line flags to the CLI tool.
-
-| C++ Option Member           | CLI Flag                    | Description                                                                   | Default Value | C++ Type/Enum                  |
-| :-------------------------- | :-------------------------- | :---------------------------------------------------------------------------- | :------------ | :----------------------------- |
-| `variableStartMarker`     | `--start=<string>`          | The starting delimiter for placeholders.                                      | `${`          | `std::string`                  |
-| `variableEndMarker`       | `--end=<string>`            | The ending delimiter for placeholders.                                        | `}`           | `std::string`                  |
-| `onMissingKey`            | `--on-missing-key=`         | Behavior for unresolved placeholders during `apply` (`Ignore`/`Error`).         | `Ignore`      | `permuto::MissingKeyBehavior` |
-| `enableStringInterpolation` | `--string-interpolation` | If `true`, interpolates variables in non-exact-match strings during `apply`. If `false`, non-exact-match strings are treated as literals. Reverse operations require `false`. | `true`        | `bool`                         |
-
-## C++ API Details
-
-The primary C++ API is defined in `<permuto/permuto.hpp>` and `<permuto/exceptions.hpp>`.
-
-*   **`permuto::Options` struct:**
-    *   `std::string variableStartMarker = "${";`
-    *   `std::string variableEndMarker = "}";`
-    *   `permuto::MissingKeyBehavior onMissingKey = permuto::MissingKeyBehavior::Ignore;`
-    *   `bool enableStringInterpolation = true;` *(Default is false)*
-    *   `void validate() const;` (Throws `std::invalid_argument` on bad options like empty/identical delimiters)
-
-*   **`permuto::MissingKeyBehavior` enum class:**
-    *   `Ignore`
-    *   `Error`
-
-*   **`permuto::apply` function:**
-    ```c++
-    nlohmann::json apply(
-        const nlohmann::json& template_json,
-        const nlohmann::json& context,
-        const permuto::Options& options = {} // Default options used if omitted
-    );
-    ```
-    Applies the template to the context based on options. Throws exceptions on errors (cycle, missing key if `Error`, invalid options).
-
-*   **`permuto::create_reverse_template` function:**
-    ```c++
-    nlohmann::json create_reverse_template(
-        const nlohmann::json& original_template,
-        const permuto::Options& options = {}
-    );
-    ```
-    Generates the reverse template mapping. Requires `options.enableStringInterpolation` to be `false` (default). Throws `std::logic_error` if interpolation is enabled. Throws `std::invalid_argument` if options are invalid.
-
-*   **`permuto::apply_reverse` function:**
-    ```c++
-    nlohmann::json apply_reverse(
-        const nlohmann::json& reverse_template,
-        const nlohmann::json& result_json
-    );
-    ```
-    Uses the `reverse_template` and `result_json` to reconstruct the context data. Throws `std::runtime_error` or `nlohmann::json` exceptions if `reverse_template` is invalid or pointers don't resolve in `result_json`.
-
-*   **Exception Classes (in `<permuto/exceptions.hpp>`):**
-    *   `permuto::PermutoException` (Base class, inherits `std::runtime_error`)
-    *   `permuto::PermutoParseException` (Currently unused)
-    *   `permuto::PermutoCycleException` (Inherits `PermutoException`, provides `const std::string& get_cycle_path() const`)
-    *   `permuto::PermutoMissingKeyException` (Inherits `PermutoException`, provides `const std::string& get_key_path() const`)
-    *   `std::invalid_argument` is thrown by `apply` or `create_reverse_template` if `options` are invalid.
-    *   `std::logic_error` is thrown by `create_reverse_template` if `enableStringInterpolation` is `true`.
-    *   `std::runtime_error` (or `nlohmann::json` exceptions) can be thrown by `apply_reverse` for malformed reverse templates or unresolved JSON pointers.
-
-## Using Permuto in another CMake Project
-
-After installing Permuto (using `cmake --install`), you can easily integrate it into your own CMake project using `find_package`.
-
-1.  **Update your `CMakeLists.txt`:**
-    ```cmake
-    cmake_minimum_required(VERSION 3.15)
-    project(MyProject)
-
-    find_package(Permuto REQUIRED) # Find the installed package
-
-    add_executable(my_app main.cpp)
-
-    # Link the Permuto library
-    target_link_libraries(my_app PRIVATE Permuto::permuto-lib)
-
-    # Permuto::permuto-lib will automatically bring in include directories
-    # and dependencies like nlohmann_json if they were linked publicly/interface.
-    ```
-
-2.  **Include and use in your C++ code:**
-    ```c++
-    #include <permuto/permuto.hpp>
-    #include <permuto/exceptions.hpp>
-    #include <nlohmann/json.hpp>
-    #include <iostream>
-
-    int main() {
-        nlohmann::json my_template = /* ... */;
-        nlohmann::json my_context = /* ... */;
-        permuto::Options opts;
-        // opts.enableStringInterpolation = false; // Example: Disable for reverse
-        try {
-            // Forward operation
-            nlohmann::json result = permuto::apply(my_template, my_context, opts);
-            std::cout << "Result: " << result.dump(2) << std::endl;
-
-            // Reverse operation (if interpolation was false)
-            if (!opts.enableStringInterpolation) {
-                nlohmann::json rev_template = permuto::create_reverse_template(my_template, opts);
-                nlohmann::json reconstructed = permuto::apply_reverse(rev_template, result);
-                std::cout << "Reconstructed: " << reconstructed.dump(2) << std::endl;
-            }
-
-        } catch (const permuto::PermutoException& e) {
-            std::cerr << "Permuto error: " << e.what() << std::endl;
-        } catch (const std::exception& e) { // Catch logic_error, runtime_error etc.
-            std::cerr << "Error: " << e.what() << std::endl;
-        }
-        return 0;
-    }
-    ```
-
-## Contributing
-
-Contributions are welcome! Please adhere to the following guidelines:
-
-*   Follow standard C++17 best practices.
-*   Maintain code style and formatting consistency.
-*   Add unit tests (in `tests/`) for any new features or bug fixes, covering both interpolation modes and reverse template functionality.
-*   Ensure all tests pass (`ctest --output-on-failure` in the build directory).
-*   Consider opening an issue first to discuss significant changes or new features.
-*   Submit changes via Pull Requests.
-*   WebKit-style commit messages are preferred.
-
-
-## License
-
-This work is released into the **Public Domain** (Unlicense).
-
-You are free to copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
-
-See the accompanying `LICENSE` file for the full Unlicense text. While attribution is not legally required, it is appreciated.
+This feature allows you to extract the original context data if you have the `result_json`

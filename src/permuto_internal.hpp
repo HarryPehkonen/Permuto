@@ -30,6 +30,26 @@ nlohmann::json process_string(
     std::set<std::string>& active_paths
 );
 
+// --- Refactored string processing functions ---
+bool is_exact_match_placeholder(
+    const std::string& template_str,
+    const std::string& start_marker,
+    const std::string& end_marker
+);
+
+std::string extract_placeholder_path(
+    const std::string& template_str,
+    const std::string& start_marker,
+    const std::string& end_marker
+);
+
+nlohmann::json interpolate_string(
+    const std::string& template_str,
+    const nlohmann::json& context,
+    const Options& options,
+    std::set<std::string>& active_paths
+);
+
 nlohmann::json resolve_and_process_placeholder(
     const std::string& path,
     const std::string& full_placeholder,
@@ -52,18 +72,54 @@ std::string stringify_json(const nlohmann::json& value);
 
 std::string escape_json_pointer_segment(const std::string& segment);
 
-// std::vector<std::string> split_string(const std::string& str, char delimiter); // No longer needed internally? Keep commented for now.
+// --- Refactored JSON pointer parsing functions ---
+std::vector<std::string> parse_json_pointer_segments(const std::string& context_path);
 
 void insert_pointer_at_context_path(
     nlohmann::json& reverse_template_node,
     const std::string& context_path,
     const std::string& pointer_to_insert);
 
+// --- Refactored reverse template building functions ---
+void process_template_object(
+    const nlohmann::json& template_node,
+    const std::string& current_pointer_str,
+    nlohmann::json& reverse_template_ref,
+    const Options& options
+);
+
+void process_template_array(
+    const nlohmann::json& template_node,
+    const std::string& current_pointer_str,
+    nlohmann::json& reverse_template_ref,
+    const Options& options
+);
+
+void process_template_string(
+    const nlohmann::json& template_node,
+    const std::string& current_pointer_str,
+    nlohmann::json& reverse_template_ref,
+    const Options& options
+);
+
 void build_reverse_template_recursive(
     const nlohmann::json& current_template_node,
     const std::string& current_result_pointer_str,
     nlohmann::json& reverse_template_ref, // Modifying this
     const Options& options);
+
+// --- Refactored context reconstruction functions ---
+void process_reverse_object(
+    const nlohmann::json& reverse_node,
+    const nlohmann::json& result_json,
+    nlohmann::json& context_node
+);
+
+void process_reverse_pointer(
+    const nlohmann::json& reverse_node,
+    const nlohmann::json& result_json,
+    nlohmann::json& context_node
+);
 
 void reconstruct_context_recursive(
     const nlohmann::json& current_reverse_node,

@@ -23,10 +23,10 @@ void print_usage(const char* prog_name) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        print_usage(argv[0]);
-        return EXIT_FAILURE;
-    }
+    /// if (argc < 3) {
+    ///     print_usage(argv[0]);
+    ///     return EXIT_FAILURE;
+    /// }
 
     std::string template_filename;
     std::string context_filename;
