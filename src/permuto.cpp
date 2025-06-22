@@ -11,6 +11,8 @@
 #include <sstream> // For string splitting and building
 #include <stdexcept> // logic_error, runtime_error
 #include <vector> // For splitting context path
+#include <optional>
+#include <functional> // For std::reference_wrapper
 
 namespace permuto {
 
@@ -603,10 +605,10 @@ nlohmann::json resolve_and_process_placeholder(
 {
     ActivePathGuard path_guard(active_paths, path); // Throws on cycle
 
-    const nlohmann::json* resolved_ptr = resolve_path(context, path, options);
+    auto resolved_opt = resolve_path(context, path, options);
 
-    if (resolved_ptr) {
-        const nlohmann::json& resolved_value = *resolved_ptr;
+    if (resolved_opt) {
+        const nlohmann::json& resolved_value = resolved_opt->get();
 
         // If the resolved value is itself a string, it might contain more placeholders.
         // Recursively process it *using the current options* (which respects enableStringInterpolation).
@@ -648,14 +650,14 @@ std::string stringify_json(const nlohmann::json& value) {
 
 // --- Definition of resolve_path ---
 // Uses JSON Pointer (RFC 6901) syntax exclusively for path resolution
-const nlohmann::json* resolve_path(
+std::optional<std::reference_wrapper<const nlohmann::json>> resolve_path(
     const nlohmann::json& context,
     const std::string& path,
     const Options& options)
 {
     // Empty path represents the root document in JSON Pointer
     if (path.empty()) {
-        return &context;
+        return std::make_optional(std::ref(context));
     }
     
     // Non-empty JSON Pointers must start with '/'
@@ -663,35 +665,35 @@ const nlohmann::json* resolve_path(
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw PermutoMissingKeyException("Path must be a JSON Pointer starting with '/' or be empty for root: '" + path + "'", path);
         }
-        return nullptr;
+        return std::nullopt;
     }
     
     // Use JSON Pointer for lookup
     try {
         nlohmann::json::json_pointer ptr(path);
         const nlohmann::json& result = context.at(ptr);
-        return &result;
+        return std::make_optional(std::ref(result));
         
     } catch (const nlohmann::json::parse_error& e) {
         // Invalid JSON Pointer syntax
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw PermutoMissingKeyException("Invalid JSON Pointer syntax: '" + path + "'. Details: " + e.what(), path);
         }
-        return nullptr;
+        return std::nullopt;
         
     } catch (const nlohmann::json::out_of_range& e) {
         // Path not found in context
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw PermutoMissingKeyException("JSON Pointer not found in context: '" + path + "'", path);
         }
-        return nullptr;
+        return std::nullopt;
         
     } catch (const std::exception& e) {
         // Any other unexpected errors
         if (options.onMissingKey == MissingKeyBehavior::Error) {
             throw PermutoException("Unexpected error resolving path '" + path + "': " + e.what());
         }
-        return nullptr;
+        return std::nullopt;
     }
 }
 

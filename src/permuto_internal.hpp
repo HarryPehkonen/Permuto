@@ -7,6 +7,8 @@
 #include <set>
 #include <vector>
 #include <stdexcept> // For guard exception safety
+#include <optional>
+#include <functional> // For std::reference_wrapper
 
 // Include public headers needed for types used in internal functions
 #include "permuto/permuto.hpp" // Brings in Options, MissingKeyBehavior, PlaceholderParser, PlaceholderInfo
@@ -58,7 +60,7 @@ nlohmann::json resolve_and_process_placeholder(
     size_t current_depth = 0 // For recursion depth tracking
 );
 
-const nlohmann::json* resolve_path(
+std::optional<std::reference_wrapper<const nlohmann::json>> resolve_path(
     const nlohmann::json& context,
     const std::string& path,
     const Options& options
