@@ -14,6 +14,205 @@
 
 namespace permuto {
 
+// --- JsonPointerUtils Implementation ---
+
+std::string JsonPointerUtils::escape_segment(const std::string& segment) {
+    std::string escaped;
+    escaped.reserve(segment.length() + 4); // Reserve generously, assuming few escapes needed
+    for (char c : segment) {
+        if (c == '~') {
+            escaped += "~0";
+        } else if (c == '/') {
+            escaped += "~1";
+        } else {
+            escaped += c;
+        }
+    }
+    return escaped;
+}
+
+std::vector<std::string> JsonPointerUtils::parse_segments(const std::string& pointer) {
+    std::vector<std::string> segments;
+    std::string current_segment;
+    bool escaping = false;
+    
+    // Skip the leading '/' and parse the rest
+    for (size_t i = 1; i < pointer.length(); ++i) {
+        char c = pointer[i];
+        
+        if (escaping) {
+            // Handle escape sequences
+            if (c == '0') {
+                current_segment += '~';
+            } else if (c == '1') {
+                current_segment += '/';
+            } else {
+                throw std::runtime_error("Invalid escape sequence in JSON Pointer: ~" + std::string(1, c));
+            }
+            escaping = false;
+        } else if (c == '~') {
+            escaping = true;
+        } else if (c == '/') {
+            // End of segment
+            segments.push_back(current_segment);
+            current_segment.clear();
+        } else {
+            current_segment += c;
+        }
+    }
+    
+    // Don't forget the last segment
+    if (!current_segment.empty() || pointer.back() == '/') {
+        segments.push_back(current_segment);
+    }
+    
+    return segments;
+}
+
+bool JsonPointerUtils::is_valid_pointer(const std::string& pointer) {
+    // Empty pointer is valid (represents root)
+    if (pointer.empty()) {
+        return true;
+    }
+    
+    // Non-empty pointers must start with '/'
+    if (pointer[0] != '/') {
+        return false;
+    }
+    
+    // Validate JSON Pointer syntax
+    try {
+        nlohmann::json::json_pointer ptr(pointer);
+        return true;
+    } catch (const nlohmann::json::parse_error&) {
+        return false;
+    }
+}
+
+std::string JsonPointerUtils::create_pointer(const std::vector<std::string>& segments) {
+    if (segments.empty()) {
+        return "";
+    }
+    
+    std::string result = "/";
+    for (size_t i = 0; i < segments.size(); ++i) {
+        if (i > 0) {
+            result += "/";
+        }
+        result += escape_segment(segments[i]);
+    }
+    return result;
+}
+
+// --- ContextPath Implementation ---
+
+ContextPath::ContextPath(std::string path) 
+    : path_(std::move(path)), is_valid_(validate()) {}
+
+std::optional<ContextPath> ContextPath::from_string(const std::string& path) {
+    ContextPath context_path(path);
+    if (context_path.is_valid()) {
+        return context_path;
+    }
+    return std::nullopt;
+}
+
+bool ContextPath::validate() const {
+    return JsonPointerUtils::is_valid_pointer(path_);
+}
+
+// --- PlaceholderParser Implementation ---
+
+bool PlaceholderParser::is_exact_match_placeholder(const std::string& template_str) const {
+    const size_t templateLen = template_str.length();
+    
+    // Check for exact match structure
+    bool starts_with_marker = (templateLen >= min_placeholder_length_) && 
+                             (template_str.rfind(start_marker_, 0) == 0);
+    bool ends_with_marker = (templateLen >= min_placeholder_length_) && 
+                           (template_str.find(end_marker_, templateLen - end_marker_.length()) == (templateLen - end_marker_.length()));
+
+    if (!starts_with_marker || !ends_with_marker) {
+        return false;
+    }
+
+    // Check for inner markers to ensure *only* one placeholder
+    size_t next_start_pos = template_str.find(start_marker_, start_marker_.length());
+    bool no_inner_start = (next_start_pos == std::string::npos || 
+                          next_start_pos >= (templateLen - end_marker_.length()));
+
+    return no_inner_start;
+}
+
+PlaceholderInfo PlaceholderParser::extract_placeholder_info(const std::string& template_str) const {
+    if (!is_exact_match_placeholder(template_str)) {
+        return PlaceholderInfo{};
+    }
+    
+    const size_t startLen = start_marker_.length();
+    const size_t endLen = end_marker_.length();
+    const size_t templateLen = template_str.length();
+    
+    std::string path_str = template_str.substr(startLen, templateLen - startLen - endLen);
+    
+    // Empty placeholders should be treated as invalid (returned as literals)
+    if (path_str.empty()) {
+        return PlaceholderInfo{
+            ContextPath(""),  // Empty path
+            template_str,     // Full placeholder
+            0,               // Start pos
+            templateLen,     // End pos
+            false           // Invalid - should be treated as literal
+        };
+    }
+    
+    ContextPath path(path_str);
+    
+    return PlaceholderInfo{
+        std::move(path),
+        template_str,
+        0,
+        templateLen,
+        path.is_valid()
+    };
+}
+
+std::vector<PlaceholderInfo> PlaceholderParser::find_all_placeholders(const std::string& template_str) const {
+    std::vector<PlaceholderInfo> placeholders;
+    const size_t templateLen = template_str.length();
+    size_t current_pos = 0;
+
+    while (current_pos < templateLen) {
+        size_t start_pos = template_str.find(start_marker_, current_pos);
+
+        if (start_pos == std::string::npos) {
+            break;
+        }
+
+        size_t end_pos = template_str.find(end_marker_, start_pos + start_marker_.length());
+
+        if (end_pos == std::string::npos) {
+            break;
+        }
+
+        // Extract path and validate
+        std::string path_str = template_str.substr(start_pos + start_marker_.length(), 
+                                                  end_pos - (start_pos + start_marker_.length()));
+        std::string full_placeholder = template_str.substr(start_pos, end_pos + end_marker_.length() - start_pos);
+        
+        // Empty placeholders should be treated as invalid (returned as literals)
+        bool is_valid = !path_str.empty() && path_str[0] == '/';
+        ContextPath path(path_str);
+
+        placeholders.emplace_back(std::move(path), std::move(full_placeholder), 
+                                 start_pos, end_pos + end_marker_.length(), is_valid);
+
+        current_pos = end_pos + end_marker_.length();
+    }
+
+    return placeholders;
+}
+
 // --- Public API Implementation ---
 
 nlohmann::json apply(
@@ -26,7 +225,7 @@ nlohmann::json apply(
     std::set<std::string> active_paths; // Initialize cycle detection set
 
     // Start recursive processing from the root of the template
-    return detail::process_node(template_json, context, options, active_paths);
+    return detail::process_node(template_json, context, options, active_paths, 0);
 }
 
 
@@ -83,24 +282,6 @@ nlohmann::json apply_reverse(
 // --- Detail Implementation ---
 namespace detail {
 
-// Helper to escape keys for JSON Pointer segments
-// Escapes '~' to '~0' and '/' to '~1' according to RFC 6901
-std::string escape_json_pointer_segment(const std::string& segment) {
-    std::string escaped;
-    // Reserve generously, assuming few escapes needed
-    escaped.reserve(segment.length() + 4);
-    for (char c : segment) {
-        if (c == '~') {
-            escaped += "~0";
-        } else if (c == '/') {
-            escaped += "~1";
-        } else {
-            escaped += c;
-        }
-    }
-    return escaped;
-}
-
 // Helper to insert a pointer string into the reverse template structure
 // This function converts a JSON Pointer path into a nested object structure
 // and inserts the result pointer at the appropriate location
@@ -113,7 +294,7 @@ void insert_pointer_at_context_path(
         throw std::runtime_error("[Permuto Internal] Context path must be a JSON Pointer starting with '/': " + context_path);
     }
     
-    std::vector<std::string> segments = parse_json_pointer_segments(context_path);
+    std::vector<std::string> segments = JsonPointerUtils::parse_segments(context_path);
     
     // Build the nested structure
     nlohmann::json* current_node = &reverse_template_node;
@@ -135,47 +316,6 @@ void insert_pointer_at_context_path(
             current_node = &(*current_node)[segment];
         }
     }
-}
-
-// --- Refactored JSON pointer parsing functions ---
-
-std::vector<std::string> parse_json_pointer_segments(const std::string& context_path)
-{
-    std::vector<std::string> segments;
-    std::string current_segment;
-    bool escaping = false;
-    
-    // Skip the leading '/' and parse the rest
-    for (size_t i = 1; i < context_path.length(); ++i) {
-        char c = context_path[i];
-        
-        if (escaping) {
-            // Handle escape sequences
-            if (c == '0') {
-                current_segment += '~';
-            } else if (c == '1') {
-                current_segment += '/';
-            } else {
-                throw std::runtime_error("[Permuto Internal] Invalid escape sequence in JSON Pointer: ~" + std::string(1, c));
-            }
-            escaping = false;
-        } else if (c == '~') {
-            escaping = true;
-        } else if (c == '/') {
-            // End of segment
-            segments.push_back(current_segment);
-            current_segment.clear();
-        } else {
-            current_segment += c;
-        }
-    }
-    
-    // Don't forget the last segment
-    if (!current_segment.empty() || context_path.back() == '/') {
-        segments.push_back(current_segment);
-    }
-    
-    return segments;
 }
 
 // --- Definition of build_reverse_template_recursive ---
@@ -205,7 +345,7 @@ void process_template_object(
 {
     for (auto& [key, val] : template_node.items()) {
         // Build the pointer string for the next level
-        std::string next_pointer_str = current_pointer_str + "/" + escape_json_pointer_segment(key);
+        std::string next_pointer_str = current_pointer_str + "/" + JsonPointerUtils::escape_segment(key);
         build_reverse_template_recursive(val, next_pointer_str, reverse_template_ref, options);
     }
 }
@@ -231,37 +371,16 @@ void process_template_string(
 {
     // Check if this string is an exact match placeholder
     const std::string& template_str = template_node.get<std::string>();
-    const std::string& startMarker = options.variableStartMarker;
-    const std::string& endMarker = options.variableEndMarker;
-    const size_t startLen = startMarker.length();
-    const size_t endLen = endMarker.length();
-    const size_t templateLen = template_str.length();
-    const size_t minPlaceholderLen = startLen + endLen + 1;
-
-    // Check for exact match structure
-    bool starts_with_marker = (templateLen >= minPlaceholderLen) && (template_str.rfind(startMarker, 0) == 0);
-    bool ends_with_marker = (templateLen >= minPlaceholderLen) && (template_str.find(endMarker, templateLen - endLen) == (templateLen - endLen));
-
-    if (starts_with_marker && ends_with_marker) {
-         // Check for inner markers to ensure *only* one placeholder
-         size_t next_start_pos = template_str.find(startMarker, startLen);
-         bool no_inner_start = (next_start_pos == std::string::npos || next_start_pos >= (templateLen - endLen));
-
-         if (no_inner_start) {
-             std::string context_path = template_str.substr(startLen, templateLen - startLen - endLen);
-             // Validate that it's a proper JSON Pointer
-             if (!context_path.empty() && context_path[0] == '/') {
-                // Found a valid exact match! Insert its location.
-                try {
-                    insert_pointer_at_context_path(reverse_template_ref, context_path, current_pointer_str);
-                } catch (const std::runtime_error& e) {
-                    // Add context to the error message
-                    throw std::runtime_error(std::string("Error building reverse template: ") + e.what());
-                }
-             }
-             // Ignore empty paths or non-JSON-Pointer paths
-         }
-         // If inner markers found, it's not an exact match, ignore it.
+    PlaceholderParser parser(options);
+    
+    PlaceholderInfo placeholder = parser.extract_placeholder_info(template_str);
+    if (placeholder.is_valid) {
+        try {
+            insert_pointer_at_context_path(reverse_template_ref, placeholder.path.get_path(), current_pointer_str);
+        } catch (const std::runtime_error& e) {
+            // Add context to the error message
+            throw std::runtime_error(std::string("Error building reverse template: ") + e.what());
+        }
     }
     // If not an exact match placeholder, ignore (it's a literal or interpolated string)
 }
@@ -337,28 +456,28 @@ nlohmann::json process_node(
     const nlohmann::json& node,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths) // Pass active_paths by reference
+    std::set<std::string>& active_paths, // Pass active_paths by reference
+    size_t current_depth) // For recursion depth tracking
 {
     if (node.is_object()) {
         nlohmann::json result_obj = nlohmann::json::object();
         for (auto& [key, val] : node.items()) {
             // Keys are NOT processed for variables. Values are.
-            result_obj[key] = process_node(val, context, options, active_paths);
+            result_obj[key] = process_node(val, context, options, active_paths, current_depth + 1);
         }
         return result_obj;
     } else if (node.is_array()) {
         nlohmann::json result_arr = nlohmann::json::array();
-        result_arr.get_ptr<nlohmann::json::array_t*>()->reserve(node.size()); // Optimization
         for (const auto& element : node) {
             // Recursively process each element in the array
-            result_arr.push_back(process_node(element, context, options, active_paths));
+            result_arr.push_back(process_node(element, context, options, active_paths, current_depth + 1));
         }
         return result_arr;
     } else if (node.is_string()) {
-        // Process strings for variable substitution/interpolation
-        return process_string(node.get<std::string>(), context, options, active_paths);
+        // Process string values for placeholders
+        return process_string(node.get<std::string>(), context, options, active_paths, current_depth);
     } else {
-        // Numbers, booleans, nulls are returned as is
+        // For non-string primitives (null, bool, number), return as-is
         return node;
     }
 }
@@ -368,24 +487,24 @@ nlohmann::json process_string(
     const std::string& template_str,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths)
+    std::set<std::string>& active_paths,
+    size_t current_depth)
 {
-    const std::string& startMarker = options.variableStartMarker;
-    const std::string& endMarker = options.variableEndMarker;
-    const size_t templateLen = template_str.length();
-    const size_t minPlaceholderLen = startMarker.length() + endMarker.length() + 1;
-
-    // Optimization: If string is too short or lacks start marker, return early
-    if (templateLen < minPlaceholderLen || template_str.find(startMarker) == std::string::npos) {
-        return nlohmann::json(template_str);
+    // Check recursion depth limit
+    if (current_depth > options.maxRecursionDepth) {
+        throw PermutoRecursionDepthException(
+            "Maximum recursion depth exceeded during string processing",
+            current_depth,
+            options.maxRecursionDepth
+        );
     }
 
+    PlaceholderParser parser(options);
+    
     // Check for exact match placeholder first
-    if (is_exact_match_placeholder(template_str, startMarker, endMarker)) {
-        std::string path = extract_placeholder_path(template_str, startMarker, endMarker);
-        if (!path.empty()) {
-            return resolve_and_process_placeholder(path, template_str, context, options, active_paths);
-        }
+    PlaceholderInfo placeholder = parser.extract_placeholder_info(template_str);
+    if (placeholder.is_valid) {
+        return process_exact_match_placeholder(placeholder, context, options, active_paths, current_depth);
     }
 
     // Handle based on interpolation option
@@ -394,114 +513,84 @@ nlohmann::json process_string(
     }
 
     // Perform interpolation
-    return interpolate_string(template_str, context, options, active_paths);
+    return process_interpolated_string(template_str, context, options, active_paths, current_depth);
 }
 
 // --- Refactored string processing functions ---
 
-bool is_exact_match_placeholder(
-    const std::string& template_str,
-    const std::string& start_marker,
-    const std::string& end_marker)
+nlohmann::json process_exact_match_placeholder(
+    const PlaceholderInfo& placeholder,
+    const nlohmann::json& context,
+    const Options& options,
+    std::set<std::string>& active_paths,
+    size_t current_depth)
 {
-    const size_t startLen = start_marker.length();
-    const size_t endLen = end_marker.length();
-    const size_t templateLen = template_str.length();
-    const size_t minPlaceholderLen = startLen + endLen + 1;
-
-    // Check for exact match structure
-    bool starts_with_marker = (templateLen >= minPlaceholderLen) && 
-                             (template_str.rfind(start_marker, 0) == 0);
-    bool ends_with_marker = (templateLen >= minPlaceholderLen) && 
-                           (template_str.find(end_marker, templateLen - endLen) == (templateLen - endLen));
-
-    if (!starts_with_marker || !ends_with_marker) {
-        return false;
-    }
-
-    // Check for inner markers to ensure *only* one placeholder
-    size_t next_start_pos = template_str.find(start_marker, startLen);
-    bool no_inner_start = (next_start_pos == std::string::npos || 
-                          next_start_pos >= (templateLen - endLen));
-
-    return no_inner_start;
+    return resolve_and_process_placeholder(
+        placeholder.path.get_path(), 
+        placeholder.full_placeholder, 
+        context, 
+        options, 
+        active_paths, 
+        current_depth
+    );
 }
 
-std::string extract_placeholder_path(
-    const std::string& template_str,
-    const std::string& start_marker,
-    const std::string& end_marker)
-{
-    const size_t startLen = start_marker.length();
-    const size_t endLen = end_marker.length();
-    const size_t templateLen = template_str.length();
-    
-    std::string path = template_str.substr(startLen, templateLen - startLen - endLen);
-    
-    // Validate that it's a proper JSON Pointer
-    if (!path.empty() && path[0] == '/') {
-        return path;
-    }
-    
-    return ""; // Return empty string for invalid paths
-}
-
-nlohmann::json interpolate_string(
+nlohmann::json process_interpolated_string(
     const std::string& template_str,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths)
+    std::set<std::string>& active_paths,
+    size_t current_depth)
 {
-    const std::string& startMarker = options.variableStartMarker;
-    const std::string& endMarker = options.variableEndMarker;
-    const size_t startLen = startMarker.length();
-    const size_t endLen = endMarker.length();
-    const size_t templateLen = template_str.length();
+    // Check recursion depth limit
+    if (current_depth > options.maxRecursionDepth) {
+        throw PermutoRecursionDepthException(
+            "Maximum recursion depth exceeded during string interpolation",
+            current_depth,
+            options.maxRecursionDepth
+        );
+    }
+
+    PlaceholderParser parser(options);
+    std::vector<PlaceholderInfo> placeholders = parser.find_all_placeholders(template_str);
+    
+    if (placeholders.empty()) {
+        return nlohmann::json(template_str);
+    }
 
     std::stringstream result_stream;
     size_t current_pos = 0;
 
-    while (current_pos < templateLen) {
-        size_t start_pos = template_str.find(startMarker, current_pos);
-
-        if (start_pos == std::string::npos) {
-            // No more start markers found, append the rest of the string
-            result_stream << template_str.substr(current_pos);
-            break;
-        }
-
+    for (const auto& placeholder : placeholders) {
         // Append the literal text between the last placeholder (or start) and this one
-        result_stream << template_str.substr(current_pos, start_pos - current_pos);
+        result_stream << template_str.substr(current_pos, placeholder.start_pos - current_pos);
 
-        size_t end_pos = template_str.find(endMarker, start_pos + startLen);
-
-        if (end_pos == std::string::npos) {
-            // Unterminated placeholder, treat the start marker and rest as literal
-            result_stream << template_str.substr(start_pos);
-            break;
-        }
-
-        // Extract path and full placeholder
-        std::string path = template_str.substr(start_pos + startLen, end_pos - (start_pos + startLen));
-        std::string full_placeholder = template_str.substr(start_pos, end_pos + endLen - start_pos);
-
-        if (path.empty()) {
-            // Empty placeholder "${}", treat as literal
-            result_stream << full_placeholder;
-        } else {
+        if (placeholder.is_valid) {
             // Resolve the placeholder
             nlohmann::json resolved_json = resolve_and_process_placeholder(
-                path, full_placeholder, context, options, active_paths);
+                placeholder.path.get_path(), 
+                placeholder.full_placeholder, 
+                context, 
+                options, 
+                active_paths, 
+                current_depth + 1
+            );
             result_stream << stringify_json(resolved_json);
+        } else {
+            // Invalid placeholder, treat as literal
+            result_stream << placeholder.full_placeholder;
         }
 
-        // Update position to search after the current placeholder
-        current_pos = end_pos + endLen;
+        current_pos = placeholder.end_pos;
+    }
+
+    // Append any remaining text after the last placeholder
+    if (current_pos < template_str.length()) {
+        result_stream << template_str.substr(current_pos);
     }
 
     return nlohmann::json(result_stream.str());
 }
-
 
 // --- Definition of resolve_and_process_placeholder ---
 nlohmann::json resolve_and_process_placeholder(
@@ -509,11 +598,12 @@ nlohmann::json resolve_and_process_placeholder(
     const std::string& full_placeholder, // Use this for errors/missing return
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths)
+    std::set<std::string>& active_paths,
+    size_t current_depth)
 {
     ActivePathGuard path_guard(active_paths, path); // Throws on cycle
 
-    const nlohmann::json* resolved_ptr = resolve_path(context, path, options, full_placeholder);
+    const nlohmann::json* resolved_ptr = resolve_path(context, path, options);
 
     if (resolved_ptr) {
         const nlohmann::json& resolved_value = *resolved_ptr;
@@ -523,7 +613,7 @@ nlohmann::json resolve_and_process_placeholder(
         if (resolved_value.is_string()) {
             // The recursive call here correctly handles the interpolation mode.
             // If interpolation is disabled, it will only process exact matches within the resolved string.
-            return process_string(resolved_value.get<std::string>(), context, options, active_paths);
+            return process_string(resolved_value.get<std::string>(), context, options, active_paths, current_depth + 1);
         } else {
             // For non-strings (null, bool, num, obj, arr), return the value directly.
             // The caller (process_string) decides whether to use this raw value
@@ -561,8 +651,7 @@ std::string stringify_json(const nlohmann::json& value) {
 const nlohmann::json* resolve_path(
     const nlohmann::json& context,
     const std::string& path,
-    const Options& options,
-    const std::string& full_placeholder_for_error)
+    const Options& options)
 {
     // Empty path represents the root document in JSON Pointer
     if (path.empty()) {

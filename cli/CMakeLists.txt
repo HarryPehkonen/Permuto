@@ -2,6 +2,9 @@
 
 add_executable(permuto main.cpp)
 
+# Apply strict compiler flags for clean code
+set_strict_compiler_flags(permuto)
+
 # Link our library and any other necessary libraries
 target_link_libraries(permuto PRIVATE permuto-lib)
 

@@ -63,26 +63,26 @@ protected:
 };
 
 TEST_F(PermutoResolvePathTests, ResolvesTopLevelKey) {
-    const json* result = permuto::detail::resolve_path(context, "/settings", ignoreOpts, "${/settings}");
+    const json* result = permuto::detail::resolve_path(context, "/settings", ignoreOpts);
     ASSERT_NE(result, nullptr);
     EXPECT_EQ(*result, context["settings"]);
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesNestedKey) {
-    const json* result = permuto::detail::resolve_path(context, "/user/address/city", ignoreOpts, "${/user/address/city}");
+    const json* result = permuto::detail::resolve_path(context, "/user/address/city", ignoreOpts);
     ASSERT_NE(result, nullptr);
     EXPECT_EQ(*result, "Wonderland");
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesDeeplyNestedKey) {
-     const json* result = permuto::detail::resolve_path(context, "/a/b/c", ignoreOpts, "${/a/b/c}");
+     const json* result = permuto::detail::resolve_path(context, "/a/b/c", ignoreOpts);
      ASSERT_NE(result, nullptr);
      EXPECT_EQ(*result, 1);
 }
 
 
 TEST_F(PermutoResolvePathTests, ResolvesToNullValue) {
-    const json* result = permuto::detail::resolve_path(context, "/top_level_null", ignoreOpts, "${/top_level_null}");
+    const json* result = permuto::detail::resolve_path(context, "/top_level_null", ignoreOpts);
     ASSERT_NE(result, nullptr);
     ASSERT_TRUE(result->is_null());
 }
@@ -90,14 +90,14 @@ TEST_F(PermutoResolvePathTests, ResolvesToNullValue) {
 // Tests for keys needing JSON Pointer escaping
 TEST_F(PermutoResolvePathTests, ResolvesKeyWithSlashes) {
      // Path "/key~1with~1slashes" to access "key/with/slashes"
-     const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts, "${/key~1with~1slashes}");
+     const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
      ASSERT_NE(result, nullptr);
      EXPECT_EQ(*result, "slashes_val");
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesKeyWithTildes) {
       // Path "/key~0with~0tildes" to access "key~with~tildes"
-     const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts, "${/key~0with~0tildes}");
+     const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
      ASSERT_NE(result, nullptr);
      EXPECT_EQ(*result, "tildes_val");
 }
@@ -105,13 +105,13 @@ TEST_F(PermutoResolvePathTests, ResolvesKeyWithTildes) {
 // Test that dot notation fails
 TEST_F(PermutoResolvePathTests, DotNotationFails) {
      // Dot notation is no longer supported
-     const json* result = permuto::detail::resolve_path(context, "user.name", ignoreOpts, "${user.name}");
+     const json* result = permuto::detail::resolve_path(context, "user.name", ignoreOpts);
      EXPECT_EQ(result, nullptr); // Should fail as it doesn't start with '/'
      
      // With error mode
      EXPECT_THROW({
         try {
-             permuto::detail::resolve_path(context, "user.name", errorOpts, "${user.name}");
+             permuto::detail::resolve_path(context, "user.name", errorOpts);
         } catch (const permuto::PermutoMissingKeyException& e) {
             EXPECT_EQ(e.get_key_path(), "user.name");
             throw;
@@ -122,31 +122,31 @@ TEST_F(PermutoResolvePathTests, DotNotationFails) {
 // Test that we can access keys with dots using JSON Pointer
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithDot) {
      // Access the key literally named "user.name" using JSON Pointer
-     const json* result = permuto::detail::resolve_path(context, "/user.name", ignoreOpts, "${/user.name}");
+     const json* result = permuto::detail::resolve_path(context, "/user.name", ignoreOpts);
      ASSERT_NE(result, nullptr);
      EXPECT_EQ(*result, "literal_dot_key_val");
 }
 
 
 TEST_F(PermutoResolvePathTests, HandlesMissingTopLevelKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/nonexistent", ignoreOpts, "${/nonexistent}");
+    const json* result = permuto::detail::resolve_path(context, "/nonexistent", ignoreOpts);
     EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingNestedKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/user/address/street", ignoreOpts, "${/user/address/street}");
+    const json* result = permuto::detail::resolve_path(context, "/user/address/street", ignoreOpts);
     EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingIntermediateKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/user/profile/id", ignoreOpts, "${/user/profile/id}");
+    const json* result = permuto::detail::resolve_path(context, "/user/profile/id", ignoreOpts);
     EXPECT_EQ(result, nullptr); // "profile" does not exist
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingTopLevelKeyError) {
     EXPECT_THROW({
         try {
-            permuto::detail::resolve_path(context, "/nonexistent", errorOpts, "${/nonexistent}");
+            permuto::detail::resolve_path(context, "/nonexistent", errorOpts);
         } catch (const permuto::PermutoMissingKeyException& e) {
             EXPECT_EQ(e.get_key_path(), "/nonexistent"); // Check the reported path
             EXPECT_NE(std::string(e.what()).find("/nonexistent"), std::string::npos);
@@ -158,7 +158,7 @@ TEST_F(PermutoResolvePathTests, HandlesMissingTopLevelKeyError) {
 TEST_F(PermutoResolvePathTests, HandlesMissingNestedKeyError) {
      EXPECT_THROW({
         try {
-            permuto::detail::resolve_path(context, "/user/address/street", errorOpts, "${/user/address/street}");
+            permuto::detail::resolve_path(context, "/user/address/street", errorOpts);
         } catch (const permuto::PermutoMissingKeyException& e) {
             EXPECT_EQ(e.get_key_path(), "/user/address/street"); // Check reported path
              EXPECT_NE(std::string(e.what()).find("/user/address/street"), std::string::npos);
@@ -170,7 +170,7 @@ TEST_F(PermutoResolvePathTests, HandlesMissingNestedKeyError) {
 TEST_F(PermutoResolvePathTests, HandlesMissingIntermediateKeyError) {
     EXPECT_THROW({
         try {
-            permuto::detail::resolve_path(context, "/user/profile/id", errorOpts, "${/user/profile/id}");
+            permuto::detail::resolve_path(context, "/user/profile/id", errorOpts);
         } catch (const permuto::PermutoMissingKeyException& e) {
             EXPECT_EQ(e.get_key_path(), "/user/profile/id"); // Check reported path
              EXPECT_NE(std::string(e.what()).find("/user/profile/id"), std::string::npos);
@@ -182,156 +182,159 @@ TEST_F(PermutoResolvePathTests, HandlesMissingIntermediateKeyError) {
 
 TEST_F(PermutoResolvePathTests, HandlesTraversalIntoNonObjectIgnore) {
     // Attempt to access "first" inside string "Alice"
-    const json* result = permuto::detail::resolve_path(context, "/user/name/first", ignoreOpts, "${/user/name/first}");
+    const json* result = permuto::detail::resolve_path(context, "/user/name/first", ignoreOpts);
     EXPECT_EQ(result, nullptr);
      // Attempt to access "value" inside boolean true
-    result = permuto::detail::resolve_path(context, "/settings/enabled/value", ignoreOpts, "${/settings/enabled/value}");
+    result = permuto::detail::resolve_path(context, "/settings/enabled/value", ignoreOpts);
     EXPECT_EQ(result, nullptr);
      // Attempt to access "key" inside array [10, 20]
-    result = permuto::detail::resolve_path(context, "/settings/values/key", ignoreOpts, "${/settings/values/key}");
+    result = permuto::detail::resolve_path(context, "/settings/values/key", ignoreOpts);
     EXPECT_EQ(result, nullptr);
      // Attempt to access "z" inside null
-     result = permuto::detail::resolve_path(context, "/top_level_null/z", ignoreOpts, "${/top_level_null/z}");
+     result = permuto::detail::resolve_path(context, "/top_level_null/z", ignoreOpts);
      EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesTraversalIntoNonObjectError) {
     EXPECT_THROW({
         try {
-            permuto::detail::resolve_path(context, "/user/name/first", errorOpts, "${/user/name/first}");
+            permuto::detail::resolve_path(context, "/user/name/first", errorOpts);
         } catch (const permuto::PermutoMissingKeyException& e) {
             EXPECT_EQ(e.get_key_path(), "/user/name/first"); // Check reported path
+             EXPECT_NE(std::string(e.what()).find("/user/name/first"), std::string::npos);
             throw;
         }
     }, permuto::PermutoMissingKeyException);
-     EXPECT_THROW({
-         try {
-             permuto::detail::resolve_path(context, "/settings/values/key", errorOpts, "${/settings/values/key}");
-         } catch (const permuto::PermutoMissingKeyException& e) {
-             EXPECT_EQ(e.get_key_path(), "/settings/values/key");
-             throw;
-         }
-     }, permuto::PermutoMissingKeyException);
-     EXPECT_THROW({
-         try {
-             permuto::detail::resolve_path(context, "/top_level_null/z", errorOpts, "${/top_level_null/z}");
-         } catch (const permuto::PermutoMissingKeyException& e) {
-             EXPECT_EQ(e.get_key_path(), "/top_level_null/z");
-             throw;
-         }
-     }, permuto::PermutoMissingKeyException);
+    
+    EXPECT_THROW({
+        try {
+            permuto::detail::resolve_path(context, "/settings/values/key", errorOpts);
+        } catch (const permuto::PermutoMissingKeyException& e) {
+            EXPECT_EQ(e.get_key_path(), "/settings/values/key");
+             EXPECT_NE(std::string(e.what()).find("/settings/values/key"), std::string::npos);
+            throw;
+        }
+    }, permuto::PermutoMissingKeyException);
+    
+    EXPECT_THROW({
+        try {
+            permuto::detail::resolve_path(context, "/top_level_null/z", errorOpts);
+        } catch (const permuto::PermutoMissingKeyException& e) {
+            EXPECT_EQ(e.get_key_path(), "/top_level_null/z");
+             EXPECT_NE(std::string(e.what()).find("/top_level_null/z"), std::string::npos);
+            throw;
+        }
+    }, permuto::PermutoMissingKeyException);
 }
 
+
 TEST_F(PermutoResolvePathTests, HandlesEmptyPathIgnore) {
-     // Empty path now returns root, not nullptr
-     const json* result = permuto::detail::resolve_path(context, "", ignoreOpts, "${}");
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, context);
+    // Empty path now returns root, not nullptr
+    const json* result = permuto::detail::resolve_path(context, "", ignoreOpts);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(*result, context);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesEmptyPathError) {
     // Empty path should return root, not throw
-    const json* result = permuto::detail::resolve_path(context, "", errorOpts, "${}");
+    const json* result = permuto::detail::resolve_path(context, "", errorOpts);
     ASSERT_NE(result, nullptr);
     EXPECT_EQ(*result, context);
 }
 
-// Tests for paths that don't start with '/'
 TEST_F(PermutoResolvePathTests, HandlesInvalidPathFormatsIgnore) {
     // These should fail validation as they don't start with '/'
-    EXPECT_EQ(permuto::detail::resolve_path(context, "user", ignoreOpts, "${user}"), nullptr);
-    EXPECT_EQ(permuto::detail::resolve_path(context, "user/name", ignoreOpts, "${user/name}"), nullptr);
-    EXPECT_EQ(permuto::detail::resolve_path(context, ".", ignoreOpts, "${.}"), nullptr);
+    EXPECT_EQ(permuto::detail::resolve_path(context, "user", ignoreOpts), nullptr);
+    EXPECT_EQ(permuto::detail::resolve_path(context, "user/name", ignoreOpts), nullptr);
+    EXPECT_EQ(permuto::detail::resolve_path(context, ".", ignoreOpts), nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesInvalidPathFormatsError) {
      // These should throw as they don't start with '/'
-     EXPECT_THROW( { try { permuto::detail::resolve_path(context, "user", errorOpts, "${user}"); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "user"); throw;} }, permuto::PermutoMissingKeyException);
-     EXPECT_THROW( { try { permuto::detail::resolve_path(context, "user/name", errorOpts, "${user/name}"); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "user/name"); throw;} }, permuto::PermutoMissingKeyException);
-     EXPECT_THROW( { try { permuto::detail::resolve_path(context, ".", errorOpts, "${.}"); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "."); throw;} }, permuto::PermutoMissingKeyException);
+      EXPECT_THROW( { try { permuto::detail::resolve_path(context, "user", errorOpts); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "user"); throw;} }, permuto::PermutoMissingKeyException);
+      EXPECT_THROW( { try { permuto::detail::resolve_path(context, "user/name", errorOpts); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "user/name"); throw;} }, permuto::PermutoMissingKeyException);
+      EXPECT_THROW( { try { permuto::detail::resolve_path(context, ".", errorOpts); } catch(const permuto::PermutoMissingKeyException& e) { EXPECT_EQ(e.get_key_path(), "."); throw;} }, permuto::PermutoMissingKeyException);
 }
 
-// --- JSON Pointer Syntax Tests ---
-// Removed duplicate test - JsonPointerAccessKeyWithDot is already defined above
-
+// Tests for JSON Pointer syntax (RFC 6901)
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithSlashes) {
-    // Path "/key~1with~1slashes" to access "key/with/slashes"
-    const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts, "${/key~1with~1slashes}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "slashes_val");
+     // Path "/key~1with~1slashes" to access "key/with/slashes"
+     const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, "slashes_val");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithTildes) {
-    // Path "/key~0with~0tildes" to access "key~with~tildes"
-    const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts, "${/key~0with~0tildes}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "tildes_val");
+      // Path "/key~0with~0tildes" to access "key~with~tildes"
+     const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, "tildes_val");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerArrayAccess) {
-    // Access array elements
-    const json* result = permuto::detail::resolve_path(context, "/items/0", ignoreOpts, "${/items/0}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "first");
-    
-    result = permuto::detail::resolve_path(context, "/items/2", ignoreOpts, "${/items/2}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "third");
+     // Access array elements
+     const json* result = permuto::detail::resolve_path(context, "/items/0", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, "first");
+     
+     result = permuto::detail::resolve_path(context, "/items/2", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, "third");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerNestedArrayAccess) {
-    // Access nested array elements
-    const json* result = permuto::detail::resolve_path(context, "/matrix/1/0", ignoreOpts, "${/matrix/1/0}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, 3);
-    
-    result = permuto::detail::resolve_path(context, "/matrix/2/1", ignoreOpts, "${/matrix/2/1}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, 6);
+     // Access nested array elements
+     const json* result = permuto::detail::resolve_path(context, "/matrix/1/0", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, 3);
+     
+     result = permuto::detail::resolve_path(context, "/matrix/2/1", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, 6);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerMissingPath) {
-    const json* result = permuto::detail::resolve_path(context, "/nonexistent/path", ignoreOpts, "${/nonexistent/path}");
-    EXPECT_EQ(result, nullptr);
+     const json* result = permuto::detail::resolve_path(context, "/nonexistent/path", ignoreOpts);
+     EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerInvalidSyntax) {
-    // Invalid JSON Pointer (missing leading slash)
-    const json* result = permuto::detail::resolve_path(context, "user/name", ignoreOpts, "${user/name}");
-    // This will be treated as dot notation and fail because of the slash
-    EXPECT_EQ(result, nullptr);
+     // Invalid JSON Pointer (missing leading slash)
+     const json* result = permuto::detail::resolve_path(context, "user/name", ignoreOpts);
+     // This will be treated as dot notation and fail because of the slash
+     EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerEmptyPath) {
-    // Empty JSON Pointer refers to the root
-    const json* result = permuto::detail::resolve_path(context, "", ignoreOpts, "${}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, context);
+     // Empty JSON Pointer refers to the root
+     const json* result = permuto::detail::resolve_path(context, "", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, context);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerSlashAlone) {
-    // "/" refers to a property with an empty string as key
-    // Our test context doesn't have such a key, so it should return nullptr
-    const json* result = permuto::detail::resolve_path(context, "/", ignoreOpts, "${/}");
-    EXPECT_EQ(result, nullptr);
+     // "/" refers to a property with an empty string as key
+     // Our test context doesn't have such a key, so it should return nullptr
+     const json* result = permuto::detail::resolve_path(context, "/", ignoreOpts);
+     EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerEmptyStringKey) {
-    // Test context with an empty string as a key
-    json context_with_empty_key = R"({
-        "": "value_for_empty_key",
-        "normal": "normal_value"
-    })"_json;
-    
-    // "/" should access the empty string key
-    const json* result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts, "${/}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "value_for_empty_key");
-    
-    // Empty path should return the whole context
-    result = permuto::detail::resolve_path(context_with_empty_key, "", ignoreOpts, "${}");
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, context_with_empty_key);
+     // Test with a context that has an empty string as a key
+     json context_with_empty_key = R"({
+         "": "value_for_empty_key",
+         "normal_key": "normal_value"
+     })"_json;
+     
+     // "/" should access the empty string key
+     const json* result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, "value_for_empty_key");
+     
+     // Empty path should return the whole context
+     result = permuto::detail::resolve_path(context_with_empty_key, "", ignoreOpts);
+     ASSERT_NE(result, nullptr);
+     EXPECT_EQ(*result, context_with_empty_key);
 }
 
 
@@ -1540,4 +1543,224 @@ TEST(PermutoPublicApiTests, JsonPointerWithInterpolation) {
     const json result = permuto::apply(tpl, ctx, opts);
     EXPECT_EQ(result["message"], "User Diana lives in Seattle");
     EXPECT_EQ(result["array_msg"], "Item at index 1 is second");
+}
+
+// Test for recursion depth limit
+TEST(PermutoPublicApiTests, RecursionDepthLimit) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "${/level4}",
+        "level4": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 2; // Set a very low limit
+
+    EXPECT_THROW({
+        try {
+            permuto::apply(template_json, context, opts);
+        } catch (const permuto::PermutoRecursionDepthException& e) {
+            EXPECT_EQ(e.get_current_depth(), 3); // Should fail at depth 3
+            EXPECT_EQ(e.get_max_depth(), 2);
+            throw;
+        }
+    }, permuto::PermutoRecursionDepthException);
+}
+
+// Test edge case: limit of 0
+TEST(PermutoPublicApiTests, RecursionDepthLimitZero) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 0; // No recursion allowed
+
+    EXPECT_THROW({
+        try {
+            permuto::apply(template_json, context, opts);
+        } catch (const permuto::PermutoRecursionDepthException& e) {
+            EXPECT_EQ(e.get_current_depth(), 1); // Should fail at depth 1
+            EXPECT_EQ(e.get_max_depth(), 0);
+            throw;
+        }
+    }, permuto::PermutoRecursionDepthException);
+}
+
+// Test edge case: limit of 1
+TEST(PermutoPublicApiTests, RecursionDepthLimitOne) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 1; // Only one level of recursion allowed
+
+    EXPECT_THROW({
+        try {
+            permuto::apply(template_json, context, opts);
+        } catch (const permuto::PermutoRecursionDepthException& e) {
+            EXPECT_EQ(e.get_current_depth(), 2); // Should fail at depth 2
+            EXPECT_EQ(e.get_max_depth(), 1);
+            throw;
+        }
+    }, permuto::PermutoRecursionDepthException);
+}
+
+// Test boundary condition: 6 levels with limit 6 (should succeed)
+TEST(PermutoPublicApiTests, RecursionDepthLimitSixSuccess) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "${/level4}",
+        "level4": "${/level5}",
+        "level5": "${/level6}",
+        "level6": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 7; // One more than the chain length to allow success
+
+    // Should succeed
+    json result = permuto::apply(template_json, context, opts);
+    EXPECT_EQ(result["result"], "end");
+}
+
+// Test boundary condition: 7 levels with limit 6 (should fail)
+TEST(PermutoPublicApiTests, RecursionDepthLimitSixFailure) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "${/level4}",
+        "level4": "${/level5}",
+        "level5": "${/level6}",
+        "level6": "${/level7}",
+        "level7": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 6; // One less than the chain length
+
+    EXPECT_THROW({
+        try {
+            permuto::apply(template_json, context, opts);
+        } catch (const permuto::PermutoRecursionDepthException& e) {
+            EXPECT_EQ(e.get_current_depth(), 7); // Should fail at depth 7
+            EXPECT_EQ(e.get_max_depth(), 6);
+            throw;
+        }
+    }, permuto::PermutoRecursionDepthException);
+}
+
+// Test higher limit: 10 levels with limit 10 (should succeed)
+TEST(PermutoPublicApiTests, RecursionDepthLimitTenSuccess) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "${/level4}",
+        "level4": "${/level5}",
+        "level5": "${/level6}",
+        "level6": "${/level7}",
+        "level7": "${/level8}",
+        "level8": "${/level9}",
+        "level9": "${/level10}",
+        "level10": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 11; // One more than the chain length to allow success
+
+    // Should succeed
+    json result = permuto::apply(template_json, context, opts);
+    EXPECT_EQ(result["result"], "end");
+}
+
+// Test higher limit: 11 levels with limit 10 (should fail)
+TEST(PermutoPublicApiTests, RecursionDepthLimitTenFailure) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "${/level4}",
+        "level4": "${/level5}",
+        "level5": "${/level6}",
+        "level6": "${/level7}",
+        "level7": "${/level8}",
+        "level8": "${/level9}",
+        "level9": "${/level10}",
+        "level10": "${/level11}",
+        "level11": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 10; // One less than the chain length
+
+    EXPECT_THROW({
+        try {
+            permuto::apply(template_json, context, opts);
+        } catch (const permuto::PermutoRecursionDepthException& e) {
+            EXPECT_EQ(e.get_current_depth(), 11); // Should fail at depth 11
+            EXPECT_EQ(e.get_max_depth(), 10);
+            throw;
+        }
+    }, permuto::PermutoRecursionDepthException);
+}
+
+// Test non-throwing case: shorter chain than limit
+TEST(PermutoPublicApiTests, RecursionDepthLimitNotReached) {
+    json context = R"({
+        "level1": "${/level2}",
+        "level2": "${/level3}",
+        "level3": "end"
+    })"_json;
+
+    json template_json = R"({
+        "result": "${/level1}"
+    })"_json;
+
+    permuto::Options opts;
+    opts.enableStringInterpolation = true;
+    opts.maxRecursionDepth = 10; // Much higher than needed
+
+    // Should succeed without throwing
+    json result = permuto::apply(template_json, context, opts);
+    EXPECT_EQ(result["result"], "end");
 }

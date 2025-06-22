@@ -12,6 +12,9 @@ endif()
 # Create the test executable
 add_executable(permuto_tests permuto_test.cpp)
 
+# Apply strict compiler flags for clean code
+set_strict_compiler_flags(permuto_tests)
+
 # Link the library being tested and Google Test
 target_link_libraries(permuto_tests PRIVATE permuto-lib GTest::gtest_main) # gtest_main provides main()
 

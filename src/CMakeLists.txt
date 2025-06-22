@@ -7,6 +7,9 @@ set(LIB_SOURCES
 
 add_library(permuto-lib STATIC ${LIB_SOURCES}) # Use STATIC as requested
 
+# Apply strict compiler flags for clean code
+set_strict_compiler_flags(permuto-lib)
+
 # Link dependencies
 # nlohmann_json is header-only, but its CMake target sets include directories correctly
 target_link_libraries(permuto-lib PUBLIC nlohmann_json::nlohmann_json)

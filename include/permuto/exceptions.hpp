@@ -64,6 +64,32 @@ public:
     const char* what() const noexcept override;
 };
 
+/**
+ * @brief Exception thrown when the maximum recursion depth is exceeded.
+ */
+class PermutoRecursionDepthException : public PermutoException {
+private:
+    size_t current_depth_;
+    size_t max_depth_;
+public:
+    PermutoRecursionDepthException(const std::string& message, size_t current_depth, size_t max_depth)
+        : PermutoException("Recursion Depth Error: " + message), 
+          current_depth_(current_depth), max_depth_(max_depth) {}
+
+    /**
+     * @brief Get the current recursion depth when the limit was exceeded.
+     */
+    size_t get_current_depth() const noexcept { return current_depth_; }
+
+    /**
+     * @brief Get the maximum allowed recursion depth.
+     */
+    size_t get_max_depth() const noexcept { return max_depth_; }
+
+    // Override what() to include depth information
+    const char* what() const noexcept override;
+};
+
 } // namespace permuto
 
 #endif // PERMUTO_EXCEPTIONS_HPP

@@ -38,4 +38,18 @@ const char* PermutoMissingKeyException::what() const noexcept {
     }
 }
 
+const char* PermutoRecursionDepthException::what() const noexcept {
+    try {
+        tls_exception_buffer = std::runtime_error::what(); // Get base message
+        tls_exception_buffer += " Depth: [";
+        tls_exception_buffer += std::to_string(get_current_depth());
+        tls_exception_buffer += "/";
+        tls_exception_buffer += std::to_string(get_max_depth());
+        tls_exception_buffer += "]";
+        return tls_exception_buffer.c_str();
+    } catch (...) {
+        return std::runtime_error::what();
+    }
+}
+
 } // namespace permuto

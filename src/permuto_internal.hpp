@@ -9,7 +9,7 @@
 #include <stdexcept> // For guard exception safety
 
 // Include public headers needed for types used in internal functions
-#include "permuto/permuto.hpp" // Brings in Options, MissingKeyBehavior
+#include "permuto/permuto.hpp" // Brings in Options, MissingKeyBehavior, PlaceholderParser, PlaceholderInfo
 #include "permuto/exceptions.hpp" // Brings in exception types
 
 namespace permuto {
@@ -20,34 +20,33 @@ nlohmann::json process_node(
     const nlohmann::json& node,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths // For cycle detection
+    std::set<std::string>& active_paths, // For cycle detection
+    size_t current_depth = 0 // For recursion depth tracking
 );
 
 nlohmann::json process_string(
     const std::string& template_str,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths
+    std::set<std::string>& active_paths,
+    size_t current_depth = 0 // For recursion depth tracking
 );
 
 // --- Refactored string processing functions ---
-bool is_exact_match_placeholder(
-    const std::string& template_str,
-    const std::string& start_marker,
-    const std::string& end_marker
+nlohmann::json process_exact_match_placeholder(
+    const PlaceholderInfo& placeholder,
+    const nlohmann::json& context,
+    const Options& options,
+    std::set<std::string>& active_paths,
+    size_t current_depth
 );
 
-std::string extract_placeholder_path(
-    const std::string& template_str,
-    const std::string& start_marker,
-    const std::string& end_marker
-);
-
-nlohmann::json interpolate_string(
+nlohmann::json process_interpolated_string(
     const std::string& template_str,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths
+    std::set<std::string>& active_paths,
+    size_t current_depth
 );
 
 nlohmann::json resolve_and_process_placeholder(
@@ -55,25 +54,19 @@ nlohmann::json resolve_and_process_placeholder(
     const std::string& full_placeholder,
     const nlohmann::json& context,
     const Options& options,
-    std::set<std::string>& active_paths
+    std::set<std::string>& active_paths,
+    size_t current_depth = 0 // For recursion depth tracking
 );
 
 const nlohmann::json* resolve_path(
     const nlohmann::json& context,
     const std::string& path,
-    const Options& options,
-    const std::string& full_placeholder_for_error // Added for better error messages
+    const Options& options
 );
 
 std::string stringify_json(const nlohmann::json& value);
 
-
 // --- Forward Declarations for Reverse Operations ---
-
-std::string escape_json_pointer_segment(const std::string& segment);
-
-// --- Refactored JSON pointer parsing functions ---
-std::vector<std::string> parse_json_pointer_segments(const std::string& context_path);
 
 void insert_pointer_at_context_path(
     nlohmann::json& reverse_template_node,
@@ -127,7 +120,6 @@ void reconstruct_context_recursive(
     nlohmann::json& current_context_node // Modifying this
 );
 
-
 // --- RAII Guard for cycle detection (used by apply()) ---
 class ActivePathGuard {
     std::set<std::string>& active_paths_;
@@ -173,7 +165,6 @@ public:
     ActivePathGuard(ActivePathGuard&&) = delete;
     ActivePathGuard& operator=(ActivePathGuard&&) = delete;
 };
-
 
 } // namespace detail
 } // namespace permuto
