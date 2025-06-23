@@ -320,23 +320,161 @@ TEST_F(PermutoResolvePathTests, JsonPointerSlashAlone) {
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerEmptyStringKey) {
-     // Test with a context that has an empty string as a key
-     json context_with_empty_key = R"({
-         "": "value_for_empty_key",
-         "normal_key": "normal_value"
-     })"_json;
-     
-     // "/" should access the empty string key
-     auto result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts);
-     ASSERT_TRUE(result.has_value());
-     EXPECT_EQ(result->get(), "value_for_empty_key");
-     
-     // Empty path should return the whole context
-     result = permuto::detail::resolve_path(context_with_empty_key, "", ignoreOpts);
-     ASSERT_TRUE(result.has_value());
-     EXPECT_EQ(result->get(), context_with_empty_key);
+    // Test with a context that has an empty string as a key
+    json context_with_empty_key = R"({
+        "": "value_for_empty_key",
+        "normal_key": "normal_value"
+    })"_json;
+    
+    // "/" should access the empty string key
+    auto result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), "value_for_empty_key");
+    
+    // Empty path should return the whole context
+    result = permuto::detail::resolve_path(context_with_empty_key, "", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), context_with_empty_key);
 }
 
+
+// --- Test Suite for std::reference_wrapper functionality ---
+class PermutoReferenceWrapperTests : public ::testing::Test {
+protected:
+    json context = R"({
+        "user": { "name": "Alice", "id": 123 },
+        "settings": { "theme": "dark", "enabled": true },
+        "items": [1, 2, 3],
+        "counter": 42
+    })"_json;
+
+    permuto::Options ignoreOpts;
+
+    void SetUp() override {
+        ignoreOpts.onMissingKey = permuto::MissingKeyBehavior::Ignore;
+    }
+};
+
+TEST_F(PermutoReferenceWrapperTests, ReturnsActualReference) {
+    // Test that resolve_path returns actual references to the original data
+    auto result = permuto::detail::resolve_path(context, "/user/name", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& resolved_ref = result->get();
+    // Verify it's actually a reference to the original data
+    EXPECT_EQ(&resolved_ref, &context["user"]["name"]);
+    
+    // Verify the value matches
+    EXPECT_EQ(resolved_ref, "Alice");
+}
+
+TEST_F(PermutoReferenceWrapperTests, ReferenceReflectsModifications) {
+    // Test that modifications to the original context are reflected in resolved references
+    json mutable_context = context;
+    
+    // First resolve a reference
+    auto result = permuto::detail::resolve_path(mutable_context, "/user/name", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    const auto& resolved_ref = result->get();
+    EXPECT_EQ(resolved_ref, "Alice");
+    
+    // Modify the original data
+    mutable_context["user"]["name"] = "Bob";
+    
+    // The reference should now reflect the change
+    EXPECT_EQ(resolved_ref, "Bob");
+    EXPECT_EQ(&resolved_ref, &mutable_context["user"]["name"]);
+}
+
+TEST_F(PermutoReferenceWrapperTests, MultipleReferencesToSameData) {
+    // Test that multiple resolutions return references to the same underlying data
+    auto result1 = permuto::detail::resolve_path(context, "/counter", ignoreOpts);
+    auto result2 = permuto::detail::resolve_path(context, "/counter", ignoreOpts);
+    
+    ASSERT_TRUE(result1.has_value());
+    ASSERT_TRUE(result2.has_value());
+    
+    const auto& ref1 = result1->get();
+    const auto& ref2 = result2->get();
+    
+    // Both should reference the same data
+    EXPECT_EQ(&ref1, &ref2);
+    EXPECT_EQ(&ref1, &context["counter"]);
+    EXPECT_EQ(ref1, 42);
+    EXPECT_EQ(ref2, 42);
+}
+
+TEST_F(PermutoReferenceWrapperTests, ReferenceToNestedObject) {
+    // Test references to nested objects
+    auto result = permuto::detail::resolve_path(context, "/user", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& user_ref = result->get();
+    EXPECT_EQ(&user_ref, &context["user"]);
+    EXPECT_TRUE(user_ref.is_object());
+    EXPECT_EQ(user_ref["name"], "Alice");
+    EXPECT_EQ(user_ref["id"], 123);
+}
+
+TEST_F(PermutoReferenceWrapperTests, ReferenceToArrayElement) {
+    // Test references to array elements
+    auto result = permuto::detail::resolve_path(context, "/items/1", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& item_ref = result->get();
+    EXPECT_EQ(&item_ref, &context["items"][1]);
+    EXPECT_EQ(item_ref, 2);
+}
+
+TEST_F(PermutoReferenceWrapperTests, ReferenceToRootContext) {
+    // Test reference to the root context
+    auto result = permuto::detail::resolve_path(context, "", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& root_ref = result->get();
+    EXPECT_EQ(&root_ref, &context);
+    EXPECT_TRUE(root_ref.is_object());
+    EXPECT_EQ(root_ref["user"]["name"], "Alice");
+}
+
+TEST_F(PermutoReferenceWrapperTests, ConstCorrectness) {
+    // Test that references maintain const correctness
+    auto result = permuto::detail::resolve_path(context, "/user/name", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& resolved_ref = result->get();
+    
+    // This should compile - we're getting a const reference
+    static_assert(std::is_same_v<decltype(resolved_ref), const nlohmann::json&>);
+    
+    // Verify we can't modify through the reference (const correctness)
+    // The following would not compile:
+    // resolved_ref = "Bob";  // Error: assignment of read-only reference
+    
+    EXPECT_EQ(resolved_ref, "Alice");
+}
+
+TEST_F(PermutoReferenceWrapperTests, NoUnnecessaryCopying) {
+    // Test that we're not copying large objects
+    json large_context = R"({
+        "large_array": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "large_object": {
+            "key1": "value1", "key2": "value2", "key3": "value3",
+            "key4": "value4", "key5": "value5", "key6": "value6"
+        }
+    })"_json;
+    
+    auto result = permuto::detail::resolve_path(large_context, "/large_array", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    
+    const auto& array_ref = result->get();
+    EXPECT_EQ(&array_ref, &large_context["large_array"]);
+    
+    // Verify it's the same array by checking size and content
+    EXPECT_EQ(array_ref.size(), 10);
+    EXPECT_EQ(array_ref[0], 1);
+    EXPECT_EQ(array_ref[9], 10);
+}
 
 // --- Test Suite for detail::process_string ---
 // ... (No changes needed in this suite, should still pass) ...
