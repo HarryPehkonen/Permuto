@@ -149,15 +149,8 @@ public:
     }
 
     ~ActivePathGuard() {
-        // Use a try-catch block because erase might throw, and destructors should not throw.
-        // Although std::set::erase(const Key&) is not supposed to throw C++11 onwards if Key's comparison doesn't.
-        try {
-            if (added_) { // Only erase if we actually added it
-                active_paths_.erase(path_);
-            }
-        } catch (...) {
-            // Log error or handle? Difficult in a destructor. std::terminate might be called.
-            // For simplicity, we assume erase won't throw here under normal conditions.
+        if (added_) { // Only erase if we actually added it
+            active_paths_.erase(path_);
         }
     }
 
