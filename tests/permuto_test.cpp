@@ -63,50 +63,50 @@ protected:
 };
 
 TEST_F(PermutoResolvePathTests, ResolvesTopLevelKey) {
-    const json* result = permuto::detail::resolve_path(context, "/settings", ignoreOpts);
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, context["settings"]);
+    const auto result = permuto::detail::resolve_path(context, "/settings", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), context["settings"]);
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesNestedKey) {
-    const json* result = permuto::detail::resolve_path(context, "/user/address/city", ignoreOpts);
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, "Wonderland");
+    const auto result = permuto::detail::resolve_path(context, "/user/address/city", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), "Wonderland");
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesDeeplyNestedKey) {
-     const json* result = permuto::detail::resolve_path(context, "/a/b/c", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, 1);
+     const auto result = permuto::detail::resolve_path(context, "/a/b/c", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), 1);
 }
 
 
 TEST_F(PermutoResolvePathTests, ResolvesToNullValue) {
-    const json* result = permuto::detail::resolve_path(context, "/top_level_null", ignoreOpts);
-    ASSERT_NE(result, nullptr);
-    ASSERT_TRUE(result->is_null());
+    const auto result = permuto::detail::resolve_path(context, "/top_level_null", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result->get().is_null());
 }
 
 // Tests for keys needing JSON Pointer escaping
 TEST_F(PermutoResolvePathTests, ResolvesKeyWithSlashes) {
      // Path "/key~1with~1slashes" to access "key/with/slashes"
-     const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "slashes_val");
+     const auto result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "slashes_val");
 }
 
 TEST_F(PermutoResolvePathTests, ResolvesKeyWithTildes) {
       // Path "/key~0with~0tildes" to access "key~with~tildes"
-     const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "tildes_val");
+     const auto result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "tildes_val");
 }
 
 // Test that dot notation fails
 TEST_F(PermutoResolvePathTests, DotNotationFails) {
      // Dot notation is no longer supported
-     const json* result = permuto::detail::resolve_path(context, "user.name", ignoreOpts);
-     EXPECT_EQ(result, nullptr); // Should fail as it doesn't start with '/'
+     const auto result = permuto::detail::resolve_path(context, "user.name", ignoreOpts);
+     EXPECT_FALSE(result.has_value()); // Should fail as it doesn't start with '/'
      
      // With error mode
      EXPECT_THROW({
@@ -122,25 +122,25 @@ TEST_F(PermutoResolvePathTests, DotNotationFails) {
 // Test that we can access keys with dots using JSON Pointer
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithDot) {
      // Access the key literally named "user.name" using JSON Pointer
-     const json* result = permuto::detail::resolve_path(context, "/user.name", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "literal_dot_key_val");
+     const auto result = permuto::detail::resolve_path(context, "/user.name", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "literal_dot_key_val");
 }
 
 
 TEST_F(PermutoResolvePathTests, HandlesMissingTopLevelKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/nonexistent", ignoreOpts);
-    EXPECT_EQ(result, nullptr);
+    const auto result = permuto::detail::resolve_path(context, "/nonexistent", ignoreOpts);
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingNestedKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/user/address/street", ignoreOpts);
-    EXPECT_EQ(result, nullptr);
+    const auto result = permuto::detail::resolve_path(context, "/user/address/street", ignoreOpts);
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingIntermediateKeyIgnore) {
-    const json* result = permuto::detail::resolve_path(context, "/user/profile/id", ignoreOpts);
-    EXPECT_EQ(result, nullptr); // "profile" does not exist
+    const auto result = permuto::detail::resolve_path(context, "/user/profile/id", ignoreOpts);
+    EXPECT_FALSE(result.has_value()); // "profile" does not exist
 }
 
 TEST_F(PermutoResolvePathTests, HandlesMissingTopLevelKeyError) {
@@ -182,17 +182,17 @@ TEST_F(PermutoResolvePathTests, HandlesMissingIntermediateKeyError) {
 
 TEST_F(PermutoResolvePathTests, HandlesTraversalIntoNonObjectIgnore) {
     // Attempt to access "first" inside string "Alice"
-    const json* result = permuto::detail::resolve_path(context, "/user/name/first", ignoreOpts);
-    EXPECT_EQ(result, nullptr);
+    auto result = permuto::detail::resolve_path(context, "/user/name/first", ignoreOpts);
+    EXPECT_FALSE(result.has_value());
      // Attempt to access "value" inside boolean true
     result = permuto::detail::resolve_path(context, "/settings/enabled/value", ignoreOpts);
-    EXPECT_EQ(result, nullptr);
+    EXPECT_FALSE(result.has_value());
      // Attempt to access "key" inside array [10, 20]
     result = permuto::detail::resolve_path(context, "/settings/values/key", ignoreOpts);
-    EXPECT_EQ(result, nullptr);
+    EXPECT_FALSE(result.has_value());
      // Attempt to access "z" inside null
      result = permuto::detail::resolve_path(context, "/top_level_null/z", ignoreOpts);
-     EXPECT_EQ(result, nullptr);
+     EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, HandlesTraversalIntoNonObjectError) {
@@ -230,23 +230,23 @@ TEST_F(PermutoResolvePathTests, HandlesTraversalIntoNonObjectError) {
 
 TEST_F(PermutoResolvePathTests, HandlesEmptyPathIgnore) {
     // Empty path now returns root, not nullptr
-    const json* result = permuto::detail::resolve_path(context, "", ignoreOpts);
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, context);
+    const auto result = permuto::detail::resolve_path(context, "", ignoreOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), context);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesEmptyPathError) {
     // Empty path should return root, not throw
-    const json* result = permuto::detail::resolve_path(context, "", errorOpts);
-    ASSERT_NE(result, nullptr);
-    EXPECT_EQ(*result, context);
+    const auto result = permuto::detail::resolve_path(context, "", errorOpts);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->get(), context);
 }
 
 TEST_F(PermutoResolvePathTests, HandlesInvalidPathFormatsIgnore) {
     // These should fail validation as they don't start with '/'
-    EXPECT_EQ(permuto::detail::resolve_path(context, "user", ignoreOpts), nullptr);
-    EXPECT_EQ(permuto::detail::resolve_path(context, "user/name", ignoreOpts), nullptr);
-    EXPECT_EQ(permuto::detail::resolve_path(context, ".", ignoreOpts), nullptr);
+    EXPECT_FALSE(permuto::detail::resolve_path(context, "user", ignoreOpts).has_value());
+    EXPECT_FALSE(permuto::detail::resolve_path(context, "user/name", ignoreOpts).has_value());
+    EXPECT_FALSE(permuto::detail::resolve_path(context, ".", ignoreOpts).has_value());
 }
 
 TEST_F(PermutoResolvePathTests, HandlesInvalidPathFormatsError) {
@@ -259,64 +259,64 @@ TEST_F(PermutoResolvePathTests, HandlesInvalidPathFormatsError) {
 // Tests for JSON Pointer syntax (RFC 6901)
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithSlashes) {
      // Path "/key~1with~1slashes" to access "key/with/slashes"
-     const json* result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "slashes_val");
+     const auto result = permuto::detail::resolve_path(context, "/key~1with~1slashes", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "slashes_val");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerAccessKeyWithTildes) {
       // Path "/key~0with~0tildes" to access "key~with~tildes"
-     const json* result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "tildes_val");
+     const auto result = permuto::detail::resolve_path(context, "/key~0with~0tildes", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "tildes_val");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerArrayAccess) {
      // Access array elements
-     const json* result = permuto::detail::resolve_path(context, "/items/0", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "first");
+     auto result = permuto::detail::resolve_path(context, "/items/0", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "first");
      
      result = permuto::detail::resolve_path(context, "/items/2", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "third");
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "third");
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerNestedArrayAccess) {
      // Access nested array elements
-     const json* result = permuto::detail::resolve_path(context, "/matrix/1/0", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, 3);
+     auto result = permuto::detail::resolve_path(context, "/matrix/1/0", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), 3);
      
      result = permuto::detail::resolve_path(context, "/matrix/2/1", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, 6);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), 6);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerMissingPath) {
-     const json* result = permuto::detail::resolve_path(context, "/nonexistent/path", ignoreOpts);
-     EXPECT_EQ(result, nullptr);
+     const auto result = permuto::detail::resolve_path(context, "/nonexistent/path", ignoreOpts);
+     EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerInvalidSyntax) {
      // Invalid JSON Pointer (missing leading slash)
-     const json* result = permuto::detail::resolve_path(context, "user/name", ignoreOpts);
+     const auto result = permuto::detail::resolve_path(context, "user/name", ignoreOpts);
      // This will be treated as dot notation and fail because of the slash
-     EXPECT_EQ(result, nullptr);
+     EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerEmptyPath) {
      // Empty JSON Pointer refers to the root
-     const json* result = permuto::detail::resolve_path(context, "", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, context);
+     const auto result = permuto::detail::resolve_path(context, "", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), context);
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerSlashAlone) {
      // "/" refers to a property with an empty string as key
      // Our test context doesn't have such a key, so it should return nullptr
-     const json* result = permuto::detail::resolve_path(context, "/", ignoreOpts);
-     EXPECT_EQ(result, nullptr);
+     const auto result = permuto::detail::resolve_path(context, "/", ignoreOpts);
+     EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(PermutoResolvePathTests, JsonPointerEmptyStringKey) {
@@ -327,14 +327,14 @@ TEST_F(PermutoResolvePathTests, JsonPointerEmptyStringKey) {
      })"_json;
      
      // "/" should access the empty string key
-     const json* result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, "value_for_empty_key");
+     auto result = permuto::detail::resolve_path(context_with_empty_key, "/", ignoreOpts);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), "value_for_empty_key");
      
      // Empty path should return the whole context
      result = permuto::detail::resolve_path(context_with_empty_key, "", ignoreOpts);
-     ASSERT_NE(result, nullptr);
-     EXPECT_EQ(*result, context_with_empty_key);
+     ASSERT_TRUE(result.has_value());
+     EXPECT_EQ(result->get(), context_with_empty_key);
 }
 
 
