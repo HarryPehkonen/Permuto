@@ -106,6 +106,58 @@ std::string JsonPointerUtils::create_pointer(const std::vector<std::string>& seg
     return result;
 }
 
+std::string JsonPointerUtils::dot_to_pointer(const std::string& dot_path) {
+    if (dot_path.empty()) {
+        return "";
+    }
+    
+    // Split by dots
+    std::vector<std::string> segments;
+    std::string current_segment;
+    
+    for (char c : dot_path) {
+        if (c == '.') {
+            if (!current_segment.empty()) {
+                segments.push_back(current_segment);
+                current_segment.clear();
+            }
+        } else {
+            current_segment += c;
+        }
+    }
+    
+    // Don't forget the last segment
+    if (!current_segment.empty()) {
+        segments.push_back(current_segment);
+    }
+    
+    // Convert to JSON Pointer format
+    return create_pointer(segments);
+}
+
+std::string JsonPointerUtils::unescape_segment(const std::string& escaped_segment) {
+    std::string unescaped;
+    unescaped.reserve(escaped_segment.length());
+    
+    for (size_t i = 0; i < escaped_segment.length(); ++i) {
+        if (escaped_segment[i] == '~' && i + 1 < escaped_segment.length()) {
+            if (escaped_segment[i + 1] == '0') {
+                unescaped += '~';
+                ++i; // Skip the next character
+            } else if (escaped_segment[i + 1] == '1') {
+                unescaped += '/';
+                ++i; // Skip the next character
+            } else {
+                unescaped += escaped_segment[i];
+            }
+        } else {
+            unescaped += escaped_segment[i];
+        }
+    }
+    
+    return unescaped;
+}
+
 // --- ContextPath Implementation ---
 
 ContextPath::ContextPath(std::string path) 
@@ -168,7 +220,9 @@ PlaceholderInfo PlaceholderParser::extract_placeholder_info(const std::string& t
         };
     }
     
-    ContextPath path(path_str);
+    // If path_str starts with '/', treat as JSON Pointer, else convert from dot notation
+    std::string pointer_path = (path_str[0] == '/') ? path_str : JsonPointerUtils::dot_to_pointer(path_str);
+    ContextPath path(pointer_path);
     
     return PlaceholderInfo{
         std::move(path),
@@ -202,9 +256,12 @@ std::vector<PlaceholderInfo> PlaceholderParser::find_all_placeholders(const std:
                                                   end_pos - (start_pos + start_marker_.length()));
         std::string full_placeholder = template_str.substr(start_pos, end_pos + end_marker_.length() - start_pos);
         
+        // If path_str starts with '/', treat as JSON Pointer, else convert from dot notation
+        std::string pointer_path = (!path_str.empty() && path_str[0] == '/') ? path_str : JsonPointerUtils::dot_to_pointer(path_str);
+        
         // Empty placeholders should be treated as invalid (returned as literals)
-        bool is_valid = !path_str.empty() && path_str[0] == '/';
-        ContextPath path(path_str);
+        bool is_valid = !path_str.empty() && !pointer_path.empty();
+        ContextPath path(pointer_path);
 
         placeholders.emplace_back(std::move(path), std::move(full_placeholder), 
                                  start_pos, end_pos + end_marker_.length(), is_valid);
@@ -306,14 +363,21 @@ void insert_pointer_at_context_path(
         
         if (i == segments.size() - 1) {
             // Last segment: assign the pointer string
-            (*current_node)[segment] = pointer_to_insert;
+            if (current_node->contains(segment)) {
+                // Conflict: already exists and is not the same as pointer_to_insert
+                if (!(*current_node)[segment].is_string() || (*current_node)[segment] != pointer_to_insert) {
+                    throw std::runtime_error("Context path conflict in reverse template: segment '" + segment + "' already assigned to a different pointer or is an object.");
+                }
+            } else {
+                (*current_node)[segment] = pointer_to_insert;
+            }
         } else {
             // Intermediate segment: ensure object exists
             if (!current_node->contains(segment)) {
                 (*current_node)[segment] = nlohmann::json::object();
             } else if (!(*current_node)[segment].is_object()) {
-                // Overwrite non-object with object for deeper nesting
-                (*current_node)[segment] = nlohmann::json::object();
+                // Conflict: trying to create an object where a string already exists
+                throw std::runtime_error("Context path conflict in reverse template: segment '" + segment + "' is already assigned as a value, cannot create nested object.");
             }
             current_node = &(*current_node)[segment];
         }
@@ -346,8 +410,10 @@ void process_template_object(
     const Options& options)
 {
     for (auto& [key, val] : template_node.items()) {
-        // Build the pointer string for the next level
-        std::string next_pointer_str = current_pointer_str + "/" + JsonPointerUtils::escape_segment(key);
+        // Unescape the key first, then escape it for the JSON Pointer
+        std::string unescaped_key = JsonPointerUtils::unescape_segment(key);
+        std::string escaped_key = JsonPointerUtils::escape_segment(unescaped_key);
+        std::string next_pointer_str = current_pointer_str + "/" + escaped_key;
         build_reverse_template_recursive(val, next_pointer_str, reverse_template_ref, options);
     }
 }
@@ -461,6 +527,14 @@ nlohmann::json process_node(
     std::set<std::string>& active_paths, // Pass active_paths by reference
     size_t current_depth) // For recursion depth tracking
 {
+    // Recursion depth check (fix for RecursionDepthLimit test)
+    if (current_depth >= options.maxRecursionDepth) {
+        throw PermutoRecursionDepthException(
+            "Maximum recursion depth exceeded during node processing",
+            current_depth,
+            options.maxRecursionDepth
+        );
+    }
     if (node.is_object()) {
         nlohmann::json result_obj = nlohmann::json::object();
         for (auto& [key, val] : node.items()) {
@@ -493,7 +567,7 @@ nlohmann::json process_string(
     size_t current_depth)
 {
     // Check recursion depth limit
-    if (current_depth > options.maxRecursionDepth) {
+    if (current_depth >= options.maxRecursionDepth) {
         throw PermutoRecursionDepthException(
             "Maximum recursion depth exceeded during string processing",
             current_depth,
@@ -527,7 +601,7 @@ nlohmann::json process_exact_match_placeholder(
     std::set<std::string>& active_paths,
     size_t current_depth)
 {
-    return resolve_and_process_placeholder(
+    nlohmann::json resolved_value = resolve_and_process_placeholder(
         placeholder.path.get_path(), 
         placeholder.full_placeholder, 
         context, 
@@ -535,6 +609,14 @@ nlohmann::json process_exact_match_placeholder(
         active_paths, 
         current_depth
     );
+    
+    // If interpolation is enabled, stringify the result
+    if (options.enableStringInterpolation) {
+        return nlohmann::json(stringify_json(resolved_value));
+    }
+    
+    // Otherwise, return the raw value (preserving type)
+    return resolved_value;
 }
 
 nlohmann::json process_interpolated_string(
@@ -545,7 +627,7 @@ nlohmann::json process_interpolated_string(
     size_t current_depth)
 {
     // Check recursion depth limit
-    if (current_depth > options.maxRecursionDepth) {
+    if (current_depth >= options.maxRecursionDepth) {
         throw PermutoRecursionDepthException(
             "Maximum recursion depth exceeded during string interpolation",
             current_depth,

@@ -2,6 +2,25 @@
 #ifndef PERMUTO_PERMUTO_HPP
 #define PERMUTO_PERMUTO_HPP
 
+// Export/Import macros for shared library support
+#if defined(_WIN32) || defined(_WIN64)
+    #if defined(PERMUTO_SHARED)
+        #if defined(PERMUTO_EXPORTS)
+            #define PERMUTO_API __declspec(dllexport)
+        #else
+            #define PERMUTO_API __declspec(dllimport)
+        #endif
+    #else
+        #define PERMUTO_API
+    #endif
+#else
+    #if defined(PERMUTO_SHARED)
+        #define PERMUTO_API __attribute__((visibility("default")))
+    #else
+        #define PERMUTO_API
+    #endif
+#endif
+
 #include <nlohmann/json.hpp>
 #include <string>
 #include <stdexcept> // For runtime_error, logic_error
@@ -10,11 +29,11 @@
 namespace permuto {
 
 // Forward declaration from exceptions.hpp - include exceptions.hpp for use.
-class PermutoException;
-class PermutoCycleException;
-class PermutoMissingKeyException;
-class PermutoParseException;
-class PermutoRecursionDepthException;
+class PERMUTO_API PermutoException;
+class PERMUTO_API PermutoCycleException;
+class PERMUTO_API PermutoMissingKeyException;
+class PERMUTO_API PermutoParseException;
+class PERMUTO_API PermutoRecursionDepthException;
 
 /**
  * @brief Defines behavior when a variable or path cannot be resolved during apply().
@@ -27,7 +46,7 @@ enum class MissingKeyBehavior {
 /**
  * @brief Configuration options for the Permuto processing engine.
  */
-struct Options {
+struct PERMUTO_API Options {
     std::string variableStartMarker = "${";
     std::string variableEndMarker = "}";
     MissingKeyBehavior onMissingKey = MissingKeyBehavior::Ignore;
@@ -55,7 +74,7 @@ struct Options {
 /**
  * @brief Utility class for JSON Pointer operations.
  */
-class JsonPointerUtils {
+class PERMUTO_API JsonPointerUtils {
 public:
     /**
      * @brief Escapes a string segment for use in JSON Pointer.
@@ -78,12 +97,34 @@ public:
      * @brief Creates a JSON Pointer from segments.
      */
     static std::string create_pointer(const std::vector<std::string>& segments);
+    
+    /**
+     * @brief Converts a dot-notation path to JSON Pointer format.
+     * 
+     * Converts paths like "user.name" to "/user/name", handling escaping
+     * of special characters (/, ~) according to JSON Pointer RFC 6901.
+     * 
+     * @param dot_path The dot-notation path (e.g., "user.name", "key/with/slashes")
+     * @return The JSON Pointer format path (e.g., "/user/name", "/key~1with~1slashes")
+     */
+    static std::string dot_to_pointer(const std::string& dot_path);
+    
+    /**
+     * @brief Unescapes a JSON Pointer segment.
+     * 
+     * Converts escaped sequences back to their original characters:
+     * ~0 -> ~, ~1 -> /
+     * 
+     * @param escaped_segment The escaped segment (e.g., "key~1with~1slashes")
+     * @return The unescaped segment (e.g., "key/with/slashes")
+     */
+    static std::string unescape_segment(const std::string& escaped_segment);
 };
 
 /**
  * @brief Represents a JSON Pointer path with validation and error handling.
  */
-class ContextPath {
+class PERMUTO_API ContextPath {
 private:
     std::string path_;
     bool is_valid_;
@@ -121,7 +162,7 @@ public:
 /**
  * @brief Represents a parsed placeholder with its metadata.
  */
-struct PlaceholderInfo {
+struct PERMUTO_API PlaceholderInfo {
     ContextPath path;           ///< The extracted path (e.g., "/user/name")
     std::string full_placeholder; ///< The complete placeholder (e.g., "${/user/name}")
     size_t start_pos;           ///< Start position in the original string
@@ -137,7 +178,7 @@ struct PlaceholderInfo {
 /**
  * @brief Parses and validates placeholders in template strings.
  */
-class PlaceholderParser {
+class PERMUTO_API PlaceholderParser {
 private:
     std::string start_marker_;
     std::string end_marker_;
@@ -212,7 +253,7 @@ public:
  * @throws std::invalid_argument If the provided Options are invalid (e.g., empty/identical delimiters).
  * @throws nlohmann::json::exception For JSON parsing or access errors within the context/template structure itself.
  */
-nlohmann::json apply(
+PERMUTO_API nlohmann::json apply(
     const nlohmann::json& template_json,
     const nlohmann::json& context,
     const Options& options = {} // Default constructs Options
@@ -244,7 +285,7 @@ nlohmann::json apply(
  * @throws std::runtime_error If errors occur during processing, such as conflicting context paths.
  * @throws nlohmann::json::exception For issues traversing the original_template.
  */
-nlohmann::json create_reverse_template(
+PERMUTO_API nlohmann::json create_reverse_template(
     const nlohmann::json& original_template,
     const Options& options = {} // Default options are interp=false, ignore_missing
 );
@@ -278,7 +319,7 @@ nlohmann::json create_reverse_template(
  * @throws nlohmann::json::exception For JSON parsing errors (e.g., invalid pointer syntax)
  *         or access errors (`out_of_range` if pointer lookup fails).
  */
-nlohmann::json apply_reverse(
+PERMUTO_API nlohmann::json apply_reverse(
     const nlohmann::json& reverse_template,
     const nlohmann::json& result_json
 );

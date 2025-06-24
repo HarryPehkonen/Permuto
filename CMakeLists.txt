@@ -8,6 +8,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Build Options ---
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(PERMUTO_ENABLE_TESTING "Enable building tests" ON)
+
+# Set default library type based on BUILD_SHARED_LIBS
+if(BUILD_SHARED_LIBS)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    add_definitions(-DPERMUTO_SHARED)
+    add_definitions(-DPERMUTO_EXPORTS)
+else()
+    # Ensure static builds also have proper flags
+    set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+endif()
+
 # --- Compiler Flags for Clean Code ---
 function(set_strict_compiler_flags TARGET_NAME)
     target_compile_options(${TARGET_NAME} PRIVATE
@@ -231,7 +245,6 @@ add_subdirectory(src)
 add_subdirectory(cli)
 
 # --- Testing ---
-option(PERMUTO_ENABLE_TESTING "Enable building tests" ON)
 if(PERMUTO_ENABLE_TESTING)
     enable_testing()
     add_subdirectory(tests)
@@ -243,7 +256,7 @@ endif()
 include(GNUInstallDirs)
 
 # Install the library target (defined in src/CMakeLists.txt)
-install(TARGETS permuto-lib
+install(TARGETS permuto
     EXPORT PermutoTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -275,6 +288,7 @@ configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PermutoConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfig.cmake"
     INSTALL_DESTINATION "${PERMUTO_CMAKE_CONFIG_INSTALL_DIR}"
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR
 )
 
 # Install the config files

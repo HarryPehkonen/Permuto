@@ -2,6 +2,25 @@
 #ifndef PERMUTO_EXCEPTIONS_HPP
 #define PERMUTO_EXCEPTIONS_HPP
 
+// Export/Import macros for shared library support
+#if defined(_WIN32) || defined(_WIN64)
+    #if defined(PERMUTO_SHARED)
+        #if defined(PERMUTO_EXPORTS)
+            #define PERMUTO_API __declspec(dllexport)
+        #else
+            #define PERMUTO_API __declspec(dllimport)
+        #endif
+    #else
+        #define PERMUTO_API
+    #endif
+#else
+    #if defined(PERMUTO_SHARED)
+        #define PERMUTO_API __attribute__((visibility("default")))
+    #else
+        #define PERMUTO_API
+    #endif
+#endif
+
 #include <stdexcept>
 #include <string>
 
@@ -10,7 +29,7 @@ namespace permuto {
 /**
  * @brief Base class for all Permuto exceptions.
  */
-class PermutoException : public std::runtime_error {
+class PERMUTO_API PermutoException : public std::runtime_error {
 public:
     explicit PermutoException(const std::string& message)
         : std::runtime_error(message) {}
@@ -19,7 +38,7 @@ public:
 /**
  * @brief Exception thrown for errors parsing the input template JSON.
  */
-class PermutoParseException : public PermutoException {
+class PERMUTO_API PermutoParseException : public PermutoException {
 public:
     explicit PermutoParseException(const std::string& message)
         : PermutoException("Parse Error: " + message) {}
@@ -28,7 +47,7 @@ public:
 /**
  * @brief Exception thrown when a cyclical dependency is detected during substitution.
  */
-class PermutoCycleException : public PermutoException {
+class PERMUTO_API PermutoCycleException : public PermutoException {
 private:
     std::string cycle_path_;
 public:
@@ -48,7 +67,7 @@ public:
  * @brief Exception thrown when a key or path is not found in the context
  *        and onMissingKey is set to 'error'.
  */
-class PermutoMissingKeyException : public PermutoException {
+class PERMUTO_API PermutoMissingKeyException : public PermutoException {
 private:
     std::string key_path_;
 public:
@@ -67,7 +86,7 @@ public:
 /**
  * @brief Exception thrown when the maximum recursion depth is exceeded.
  */
-class PermutoRecursionDepthException : public PermutoException {
+class PERMUTO_API PermutoRecursionDepthException : public PermutoException {
 private:
     size_t current_depth_;
     size_t max_depth_;

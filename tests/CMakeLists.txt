@@ -16,8 +16,16 @@ add_executable(permuto_tests permuto_test.cpp)
 set_strict_compiler_flags(permuto_tests)
 
 # Link the library being tested and Google Test
-target_link_libraries(permuto_tests PRIVATE permuto-lib GTest::gtest_main) # gtest_main provides main()
+target_link_libraries(permuto_tests PRIVATE permuto GTest::gtest_main) # gtest_main provides main()
 
-# Add test to CTest (requires CMake 3.10+)
-include(GoogleTest)
-gtest_discover_tests(permuto_tests)
+# Set C++ standard (can inherit from parent, but explicit is fine)
+target_compile_features(permuto_tests PRIVATE cxx_std_17)
+
+# Add tests
+add_test(NAME permuto_tests COMMAND permuto_tests)
+
+# Enable CTest integration
+set_tests_properties(permuto_tests PROPERTIES
+    TIMEOUT 300 # 5 minutes timeout
+    ENVIRONMENT "GTEST_COLOR=1" # Enable colored output
+)
