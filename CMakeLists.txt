@@ -69,6 +69,19 @@ if(PERMUTO_BUILD_TESTS)
     gtest_discover_tests(permuto_tests)
 endif()
 
+# Examples
+option(PERMUTO_BUILD_EXAMPLES "Build examples" ON)
+if(PERMUTO_BUILD_EXAMPLES)
+    add_executable(api_example examples/api_example.cpp)
+    target_link_libraries(api_example PRIVATE permuto)
+    
+    add_executable(mixed_mode_example examples/mixed_mode_example.cpp)
+    target_link_libraries(mixed_mode_example PRIVATE permuto)
+    
+    add_executable(multi_stage_example examples/multi_stage_example.cpp)
+    target_link_libraries(multi_stage_example PRIVATE permuto)
+endif()
+
 # Installation
 install(TARGETS permuto permuto_cli
     EXPORT PermutoTargets

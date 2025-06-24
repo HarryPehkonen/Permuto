@@ -216,3 +216,112 @@ TEST_F(IntegrationTest, PerformanceBaseline) {
     EXPECT_EQ(result["field_0"], "value_0");
     EXPECT_EQ(result["field_99"], "value_99");
 }
+
+TEST_F(IntegrationTest, LLMAPIWithRemoveMode) {
+    // Real-world LLM API scenario with optional parameters
+    nlohmann::json llm_template = R"({
+        "model": "${/config/model}",
+        "messages": [
+            {
+                "role": "user", 
+                "content": "${/user_input}"
+            }
+        ],
+        "temperature": "${/config/temperature}",
+        "max_tokens": "${/config/max_tokens}",
+        "top_p": "${/config/top_p}",
+        "frequency_penalty": "${/config/frequency_penalty}",
+        "presence_penalty": "${/config/presence_penalty}",
+        "stop": "${/config/stop_sequences}"
+    })"_json;
+    
+    // Context with only some parameters specified
+    nlohmann::json partial_context = R"({
+        "config": {
+            "model": "gpt-4",
+            "temperature": 0.7
+        },
+        "user_input": "Explain quantum computing"
+    })"_json;
+    
+    Options remove_opts;
+    remove_opts.missing_key_behavior = MissingKeyBehavior::Remove;
+    
+    auto result = permuto::apply(llm_template, partial_context, remove_opts);
+    
+    // Should contain only specified parameters
+    EXPECT_EQ(result["model"], "gpt-4");
+    EXPECT_EQ(result["temperature"], 0.7);
+    EXPECT_EQ(result["messages"][0]["content"], "Explain quantum computing");
+    
+    // Should NOT contain unspecified optional parameters
+    EXPECT_FALSE(result.contains("max_tokens"));
+    EXPECT_FALSE(result.contains("top_p"));
+    EXPECT_FALSE(result.contains("frequency_penalty"));
+    EXPECT_FALSE(result.contains("presence_penalty"));
+    EXPECT_FALSE(result.contains("stop"));
+    
+    // Verify this produces clean API call JSON
+    std::string api_call = result.dump();
+    EXPECT_TRUE(api_call.find("null") == std::string::npos);  // No null values
+    EXPECT_GT(api_call.length(), 50);  // Reasonable size
+}
+
+TEST_F(IntegrationTest, MixedModeWorkflow) {
+    // Workflow combining Remove and Error modes with different markers
+    nlohmann::json workflow_template = R"({
+        "api_request": {
+            "required_field": "<</user/id>>",
+            "optional_field": "${/config/debug_mode}"
+        },
+        "processing_pipeline": [
+            "validate_input",
+            "${/middleware/auth}",
+            "${/middleware/rate_limit}",
+            "process_request"
+        ]
+    })"_json;
+    
+    nlohmann::json workflow_context = R"({
+        "user": {
+            "id": 12345
+        },
+        "middleware": {
+            "auth": "jwt_middleware"
+        }
+    })"_json;
+    
+    // Step 1: Process optional fields with Remove mode
+    Options remove_opts;
+    remove_opts.missing_key_behavior = MissingKeyBehavior::Remove;
+    remove_opts.start_marker = "${";
+    remove_opts.end_marker = "}";
+    
+    auto step1_result = permuto::apply(workflow_template, workflow_context, remove_opts);
+    
+    // Optional fields should be removed
+    EXPECT_FALSE(step1_result["api_request"].contains("optional_field"));
+    EXPECT_EQ(step1_result["processing_pipeline"].size(), 3);  // rate_limit removed
+    EXPECT_EQ(step1_result["processing_pipeline"][1], "jwt_middleware");
+    
+    // Step 2: Validate required fields with Error mode
+    Options error_opts;
+    error_opts.missing_key_behavior = MissingKeyBehavior::Error;
+    error_opts.start_marker = "<<";
+    error_opts.end_marker = ">>";
+    
+    auto final_result = permuto::apply(step1_result, workflow_context, error_opts);
+    
+    // Required fields should be processed successfully
+    EXPECT_EQ(final_result["api_request"]["required_field"], 12345);
+    
+    // Test error case: missing required field
+    nlohmann::json incomplete_context = R"({
+        "middleware": {
+            "auth": "jwt_middleware"
+        }
+    })"_json;
+    
+    auto step1_incomplete = permuto::apply(workflow_template, incomplete_context, remove_opts);
+    EXPECT_THROW(permuto::apply(step1_incomplete, incomplete_context, error_opts), MissingKeyException);
+}

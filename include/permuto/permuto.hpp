@@ -9,7 +9,8 @@ namespace permuto {
     // Configuration
     enum class MissingKeyBehavior {
         Ignore,  // Leave placeholder as-is (default)
-        Error    // Throw exception
+        Error,   // Throw exception
+        Remove   // Remove the containing key/element
     };
 
     struct Options {

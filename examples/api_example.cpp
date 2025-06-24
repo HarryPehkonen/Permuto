@@ -88,7 +88,11 @@ int main() {
             }
         })"_json;
         
-        auto anthropic_result = permuto::apply(anthropic_template, context);
+        // Enable interpolation for the prompt field that mixes text with placeholders
+        permuto::Options anthropic_options;
+        anthropic_options.enable_interpolation = true;
+        
+        auto anthropic_result = permuto::apply(anthropic_template, context, anthropic_options);
         std::cout << "Anthropic API Payload:\n" << anthropic_result.dump(2) << "\n";
         
         // ===== Example 3: String Interpolation =====
@@ -156,12 +160,12 @@ int main() {
             "missing_field": "${/user/nonexistent}"
         })"_json;
         
-        // Default behavior: ignore missing keys
+        // Default behavior: ignore missing keys (leaves placeholder as-is)
         permuto::Options ignore_options;
         auto ignore_result = permuto::apply(error_template, context, ignore_options);
-        std::cout << "Missing key ignored:\n" << ignore_result.dump(2) << "\n";
+        std::cout << "IGNORE behavior - missing key left as placeholder:\n" << ignore_result.dump(2) << "\n";
         
-        // Error on missing keys
+        // Error behavior: throw exception on missing keys
         try {
             permuto::Options error_options;
             error_options.missing_key_behavior = permuto::MissingKeyBehavior::Error;
@@ -169,7 +173,8 @@ int main() {
             auto error_result = permuto::apply(error_template, context, error_options);
             std::cout << "This shouldn't print!\n";
         } catch (const permuto::MissingKeyException& e) {
-            std::cout << "\n✓ Caught expected error: " << e.what() << "\n";
+            std::cout << "\nERROR behavior - exception thrown for missing key:\n";
+            std::cout << "✓ Caught expected error: " << e.what() << "\n";
             std::cout << "Missing key path: " << e.key_path() << "\n";
         }
         

@@ -19,6 +19,11 @@ namespace permuto {
         if (max_recursion_depth == MIN_RECURSION_DEPTH) {
             throw std::invalid_argument("Max recursion depth must be greater than 0");
         }
+        
+        // Remove mode validation
+        if (missing_key_behavior == MissingKeyBehavior::Remove && enable_interpolation) {
+            throw std::invalid_argument("Remove mode is not compatible with string interpolation");
+        }
     }
     
     // Exception implementations

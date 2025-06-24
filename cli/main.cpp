@@ -17,6 +17,7 @@ namespace {
     // Missing key behavior values
     const std::string IGNORE_VALUE = "ignore";
     const std::string ERROR_VALUE = "error";
+    const std::string REMOVE_VALUE = "remove";
     
     // Program constants
     const int MIN_ARGC = 2;
@@ -41,7 +42,7 @@ void print_usage(const char* program_name) {
     std::cout << "  --reverse             Perform reverse operation\n";
     std::cout << "  --interpolation       Enable string interpolation (default: off)\n";
     std::cout << "  --no-interpolation    Disable string interpolation\n";
-    std::cout << "  --missing-key=MODE    Set missing key behavior (ignore|error)\n";
+    std::cout << "  --missing-key=MODE    Set missing key behavior (ignore|error|remove)\n";
     std::cout << "  --start=MARKER        Set start marker (default: ${)\n";
     std::cout << "  --end=MARKER          Set end marker (default: })\n";
     std::cout << "  --max-depth=N         Set max recursion depth (default: 64)\n";
@@ -96,6 +97,8 @@ int main(int argc, char* argv[]) {
                     options.missing_key_behavior = permuto::MissingKeyBehavior::Ignore;
                 } else if (mode == ERROR_VALUE) {
                     options.missing_key_behavior = permuto::MissingKeyBehavior::Error;
+                } else if (mode == REMOVE_VALUE) {
+                    options.missing_key_behavior = permuto::MissingKeyBehavior::Remove;
                 } else {
                     std::cerr << "Invalid missing key mode: " << mode << std::endl;
                     return EXIT_ERROR_CODE;

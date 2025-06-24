@@ -44,30 +44,33 @@ libpermuto/
 
 ## Development Commands
 
-**Note**: These commands are planned but not yet implemented as the project has no build system yet.
-
-### Planned Build Commands
+### Build Commands
 ```bash
-# Configure build
+# Configure build (with all features enabled)
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Build library and CLI
+# Configure build (disable tests and examples)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DPERMUTO_BUILD_TESTS=OFF -DPERMUTO_BUILD_EXAMPLES=OFF
+
+# Build library, CLI, tests, and examples
 cmake --build build
 
-# Run tests (when implemented)
+# Run tests
 cd build && ctest
 
 # Install library
 cmake --install build
 ```
 
-### Planned CLI Usage
+### Example Usage
 ```bash
-# Basic template processing
-./build/cli/permuto template.json context.json
+# Run examples (built in ./build/)
+./build/api_example
+./build/mixed_mode_example  
+./build/multi_stage_example
 
-# Reverse operations
-./build/cli/permuto --reverse template.json result.json
+# CLI usage (when implemented)
+./build/permuto_cli template.json context.json
 ```
 
 ## Key Features

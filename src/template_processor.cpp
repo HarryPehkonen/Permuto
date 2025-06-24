@@ -96,7 +96,23 @@ namespace permuto {
         nlohmann::json result = nlohmann::json::object();
         
         for (auto it = obj.begin(); it != obj.end(); ++it) {
-            result[it.key()] = process_value(it.value(), context);
+            const auto& key = it.key();
+            const auto& value = it.value();
+            
+            // Check if this is an exact placeholder that might need removal
+            if (value.is_string()) {
+                auto placeholder_path = parser_.extract_exact_placeholder(value.get<std::string>());
+                if (placeholder_path) {
+                    auto resolved_value = resolve_path(*placeholder_path, context);
+                    if (!resolved_value && options_.missing_key_behavior == MissingKeyBehavior::Remove) {
+                        // Skip this key-value pair (remove from object)
+                        continue;
+                    }
+                }
+            }
+            
+            // Process normally
+            result[key] = process_value(value, context);
         }
         
         return result;
@@ -107,6 +123,19 @@ namespace permuto {
         nlohmann::json result = nlohmann::json::array();
         
         for (const auto& item : arr) {
+            // Check if this is an exact placeholder that might need removal
+            if (item.is_string()) {
+                auto placeholder_path = parser_.extract_exact_placeholder(item.get<std::string>());
+                if (placeholder_path) {
+                    auto resolved_value = resolve_path(*placeholder_path, context);
+                    if (!resolved_value && options_.missing_key_behavior == MissingKeyBehavior::Remove) {
+                        // Skip this array element (remove from array)
+                        continue;
+                    }
+                }
+            }
+            
+            // Process normally
             result.push_back(process_value(item, context));
         }
         

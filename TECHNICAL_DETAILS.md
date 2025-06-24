@@ -28,7 +28,8 @@ namespace permuto {
     // Configuration
     enum class MissingKeyBehavior {
         Ignore,  // Leave placeholder as-is (default)
-        Error    // Throw exception
+        Error,   // Throw exception
+        Remove   // Remove the containing key/element
     };
 
     struct Options {
@@ -576,3 +577,121 @@ int main() {
 ```
 
 This design provides a clean, single-header library interface while maintaining excellent internal architecture and comprehensive CLI functionality for testing and demonstration.
+
+## Remove Mode Feature
+
+### Overview
+
+The `Remove` mode is a specialized `MissingKeyBehavior` that automatically removes keys or array elements when their placeholders cannot be resolved from the context. This feature is particularly useful for generating clean API requests where optional parameters should be omitted entirely rather than set to null values.
+
+### Behavior
+
+When `missing_key_behavior = MissingKeyBehavior::Remove`:
+
+- **Object Keys**: Missing placeholders cause the entire key-value pair to be removed from the resulting object
+- **Array Elements**: Missing placeholders cause the array element to be removed, with remaining elements shifting positions
+- **Nested Structures**: Removal applies locally - only the immediate containing unit is affected
+
+### Constraints and Limitations
+
+1. **String Interpolation Incompatibility**: Remove mode cannot be used with `enable_interpolation = true`. This limitation exists because partial string substitution would be ambiguous.
+
+2. **Root-Level Templates**: Remove mode cannot be applied to root-level placeholders (e.g., `"${/some/path}"` as the entire template) since there is no containing structure to remove from.
+
+3. **Reverse Operations**: Templates processed with Remove mode cannot be used with reverse operations (`create_reverse_template`, `apply_reverse`) because information about removed keys is lost, making round-trip reconstruction impossible.
+
+### Usage Examples
+
+#### LLM API Request (Primary Use Case)
+```cpp
+nlohmann::json api_template = R"({
+    "model": "${/config/model}",
+    "temperature": "${/config/temperature}",
+    "max_tokens": "${/config/max_tokens}",
+    "top_p": "${/config/top_p}"
+})"_json;
+
+nlohmann::json context = R"({
+    "config": {
+        "model": "gpt-4",
+        "temperature": 0.7
+    }
+})"_json;
+
+Options opts;
+opts.missing_key_behavior = MissingKeyBehavior::Remove;
+
+auto result = permuto::apply(api_template, context, opts);
+// Result: {"model": "gpt-4", "temperature": 0.7}
+// Note: max_tokens and top_p are completely omitted
+```
+
+#### Array Element Removal
+```cpp
+nlohmann::json middleware_template = R"({
+    "pipeline": [
+        "validate_input",
+        "${/middleware/auth}",
+        "${/middleware/rate_limiter}",
+        "process_request"
+    ]
+})"_json;
+
+nlohmann::json context = R"({
+    "middleware": {
+        "auth": "jwt_middleware"
+    }
+})"_json;
+
+// Result: {"pipeline": ["validate_input", "jwt_middleware", "process_request"]}
+// Note: rate_limiter element is removed, array indices shift
+```
+
+#### Mixed Mode with Different Markers
+```cpp
+// Use different placeholder markers for different behaviors
+nlohmann::json mixed_template = R"({
+    "required_field": "<</user/id>>",     // Error mode
+    "optional_field": "${/user/email}"    // Remove mode
+})"_json;
+
+// Process in two passes:
+// 1. Remove mode for ${} markers
+// 2. Error mode for <<>> markers
+Options remove_opts;
+remove_opts.missing_key_behavior = MissingKeyBehavior::Remove;
+remove_opts.start_marker = "${";
+remove_opts.end_marker = "}";
+
+auto step1 = permuto::apply(mixed_template, context, remove_opts);
+
+Options error_opts;
+error_opts.missing_key_behavior = MissingKeyBehavior::Error;
+error_opts.start_marker = "<<";
+error_opts.end_marker = ">>";
+
+auto final_result = permuto::apply(step1, context, error_opts);
+```
+
+### CLI Support
+
+```bash
+# Use Remove mode via command line
+./permuto template.json context.json --missing-key=remove
+
+# Cannot combine with interpolation (will error)
+./permuto template.json context.json --missing-key=remove --interpolation  # ERROR
+
+# Mixed mode example using different markers
+./permuto template.json context.json --missing-key=remove --start='${' --end='}'
+./permuto intermediate.json context.json --missing-key=error --start='<<' --end='>>'
+```
+
+### Implementation Notes
+
+The Remove mode is implemented at the processing level:
+- `TemplateProcessor::process_object()` skips key-value pairs with unresolved placeholders
+- `TemplateProcessor::process_array()` skips array elements with unresolved placeholders
+- Validation occurs in `Options::validate()` and `permuto::apply()` to prevent incompatible configurations
+
+This feature provides fine-grained control over JSON structure generation while maintaining the library's core design principles of safety and predictability.
