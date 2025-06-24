@@ -41,8 +41,9 @@ else()
 endif()
 
 # CLI executable
-add_executable(permuto_cli cli/main.cpp)
-target_link_libraries(permuto_cli PRIVATE permuto)
+add_executable(permuto-cli cli/main.cpp)
+target_link_libraries(permuto-cli PRIVATE permuto)
+set_target_properties(permuto-cli PROPERTIES OUTPUT_NAME permuto)
 
 # Testing
 option(PERMUTO_BUILD_TESTS "Build tests" ON)
@@ -83,7 +84,7 @@ if(PERMUTO_BUILD_EXAMPLES)
 endif()
 
 # Installation
-install(TARGETS permuto permuto_cli
+install(TARGETS permuto permuto-cli
     EXPORT PermutoTargets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

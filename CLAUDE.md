@@ -70,7 +70,7 @@ cmake --install build
 ./build/multi_stage_example
 
 # CLI usage (when implemented)
-./build/permuto_cli template.json context.json
+./build/permuto template.json context.json
 ```
 
 ## Key Features
