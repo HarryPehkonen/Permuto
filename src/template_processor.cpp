@@ -2,9 +2,13 @@
 #include <sstream>
 
 namespace permuto {
+    namespace {
+        // Constants for template processing
+        const size_t INITIAL_RECURSION_DEPTH = 0;
+    }
     TemplateProcessor::TemplateProcessor(const Options& options) 
         : options_(options), parser_(options.start_marker, options.end_marker), 
-          current_depth_(0) {
+          current_depth_(INITIAL_RECURSION_DEPTH) {
         options_.validate();
     }
     
@@ -12,7 +16,7 @@ namespace permuto {
                                             const nlohmann::json& context) const {
         // Reset state for new processing
         cycle_detector_.clear();
-        current_depth_ = 0;
+        current_depth_ = INITIAL_RECURSION_DEPTH;
         return process_value(template_json, context);
     }
     
@@ -163,7 +167,7 @@ namespace permuto {
     }
     
     void TemplateProcessor::exit_recursion() const {
-        if (current_depth_ > 0) {
+        if (current_depth_ > INITIAL_RECURSION_DEPTH) {
             --current_depth_;
         }
     }

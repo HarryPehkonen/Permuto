@@ -10,10 +10,15 @@
 #include <iostream>
 #include <fstream>
 
+namespace {
+    // Constants for output formatting
+    const size_t SEPARATOR_LENGTH = 50;
+}
+
 void print_section(const std::string& title) {
-    std::cout << "\n" << std::string(50, '=') << "\n";
+    std::cout << "\n" << std::string(SEPARATOR_LENGTH, '=') << "\n";
     std::cout << title << "\n";
-    std::cout << std::string(50, '=') << "\n";
+    std::cout << std::string(SEPARATOR_LENGTH, '=') << "\n";
 }
 
 int main() {

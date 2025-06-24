@@ -1,6 +1,10 @@
 #include "../include/permuto/permuto.hpp"
 
 namespace permuto {
+    namespace {
+        // Constants for validation
+        const size_t MIN_RECURSION_DEPTH = 0;
+    }
     // Options validation
     void Options::validate() const {
         if (start_marker.empty()) {
@@ -12,7 +16,7 @@ namespace permuto {
         if (start_marker == end_marker) {
             throw std::invalid_argument("Start and end markers must be different");
         }
-        if (max_recursion_depth == 0) {
+        if (max_recursion_depth == MIN_RECURSION_DEPTH) {
             throw std::invalid_argument("Max recursion depth must be greater than 0");
         }
     }
