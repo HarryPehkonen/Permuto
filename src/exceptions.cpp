@@ -1,55 +1,47 @@
-// permuto/src/exceptions.cpp
-#include "permuto/exceptions.hpp" // Use quotes for local includes
-#include <string>
+#include "../include/permuto/permuto.hpp"
 
 namespace permuto {
-
-// Using thread_local for buffer might be overkill, but safer than static if used across threads.
-// However, since these exceptions are typically constructed and immediately thrown/caught,
-// simple member storage and returning c_str() might suffice. Let's keep it simple.
-// Revisit if profiling shows issues or complex exception usage scenarios arise.
-
-// Store the full message generated at construction time.
-thread_local std::string tls_exception_buffer;
-
-const char* PermutoCycleException::what() const noexcept {
-    try {
-        // Simple concatenation for now. Could be more sophisticated.
-        tls_exception_buffer = std::runtime_error::what(); // Get base message
-        tls_exception_buffer += " Cycle: [";
-        tls_exception_buffer += get_cycle_path();
-        tls_exception_buffer += "]";
-        return tls_exception_buffer.c_str();
-    } catch (...) {
-        // std::terminate or return base message if buffer allocation fails
-        return std::runtime_error::what();
+    // Options validation
+    void Options::validate() const {
+        if (start_marker.empty()) {
+            throw std::invalid_argument("Start marker cannot be empty");
+        }
+        if (end_marker.empty()) {
+            throw std::invalid_argument("End marker cannot be empty");
+        }
+        if (start_marker == end_marker) {
+            throw std::invalid_argument("Start and end markers must be different");
+        }
+        if (max_recursion_depth == 0) {
+            throw std::invalid_argument("Max recursion depth must be greater than 0");
+        }
+    }
+    
+    // Exception implementations
+    PermutoException::PermutoException(const std::string& message) 
+        : std::runtime_error(message) {}
+    
+    CycleException::CycleException(const std::string& message, std::vector<std::string> cycle_path)
+        : PermutoException(message), cycle_path_(std::move(cycle_path)) {}
+    
+    const std::vector<std::string>& CycleException::cycle_path() const {
+        return cycle_path_;
+    }
+    
+    MissingKeyException::MissingKeyException(const std::string& message, std::string key_path)
+        : PermutoException(message), key_path_(std::move(key_path)) {}
+    
+    const std::string& MissingKeyException::key_path() const {
+        return key_path_;
+    }
+    
+    InvalidTemplateException::InvalidTemplateException(const std::string& message)
+        : PermutoException(message) {}
+    
+    RecursionLimitException::RecursionLimitException(const std::string& message, size_t depth)
+        : PermutoException(message), depth_(depth) {}
+    
+    size_t RecursionLimitException::depth() const {
+        return depth_;
     }
 }
-
-const char* PermutoMissingKeyException::what() const noexcept {
-     try {
-        tls_exception_buffer = std::runtime_error::what(); // Get base message
-        tls_exception_buffer += " Path: [";
-        tls_exception_buffer += get_key_path();
-        tls_exception_buffer += "]";
-        return tls_exception_buffer.c_str();
-    } catch (...) {
-        return std::runtime_error::what();
-    }
-}
-
-const char* PermutoRecursionDepthException::what() const noexcept {
-    try {
-        tls_exception_buffer = std::runtime_error::what(); // Get base message
-        tls_exception_buffer += " Depth: [";
-        tls_exception_buffer += std::to_string(get_current_depth());
-        tls_exception_buffer += "/";
-        tls_exception_buffer += std::to_string(get_max_depth());
-        tls_exception_buffer += "]";
-        return tls_exception_buffer.c_str();
-    } catch (...) {
-        return std::runtime_error::what();
-    }
-}
-
-} // namespace permuto

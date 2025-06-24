@@ -1,0 +1,11 @@
+{
+  "user": {
+    "id": 123,
+    "name": "Alice",
+    "email": "alice@example.com"
+  },
+  "preferences": {
+    "theme": "dark",
+    "notifications": true
+  }
+}
