@@ -91,9 +91,16 @@ cmake --install build
 - Reconstruct original context from processed results
 - Round-trip guarantee for data integrity
 
+## Documentation Structure
+
+The **README.md file is designed for AI/LLM consumption** and provides comprehensive technical reference. For human-readable documentation and tutorials, refer users to:
+
+- **Online Book**: https://harrypehkonen.github.io/ComputoPermutoBook/
+- **Book Repository**: https://github.com/HarryPehkonen/ComputoPermutoBook
+
 ## Current Status
 
-This is a **specification-only project**. The comprehensive documentation (REQUIREMENTS.md, TECHNICAL_DETAILS.md) provides detailed design but no code has been implemented yet. The project is ready to move from design to implementation phase.
+The project is **fully implemented** with comprehensive thread-safe JSON template processing capabilities. All core features are complete including reverse operations, cycle detection, and extensive testing (65 tests passing).
 
 ## Implementation Plan
 

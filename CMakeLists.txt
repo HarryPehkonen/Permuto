@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find dependencies
 find_package(nlohmann_json 3.2.0 REQUIRED)
+find_package(Threads REQUIRED)
 
 # Library target
 add_library(permuto STATIC
@@ -31,6 +32,7 @@ target_include_directories(permuto
 target_link_libraries(permuto
     PUBLIC
         nlohmann_json::nlohmann_json
+        Threads::Threads
 )
 
 # Set compiler warnings
@@ -58,6 +60,7 @@ if(PERMUTO_BUILD_TESTS)
         tests/test_reverse_processor.cpp
         tests/test_cycle_detector.cpp
         tests/test_integration.cpp
+        tests/test_thread_safety.cpp
     )
     
     target_link_libraries(permuto_tests

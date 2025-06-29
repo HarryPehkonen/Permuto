@@ -56,17 +56,29 @@ namespace permuto {
     };
 
     // Primary API functions
+    // 
+    // THREAD SAFETY GUARANTEE:
+    // All public API functions are thread-safe and can be called concurrently
+    // from multiple threads without synchronization. Each function call operates
+    // on independent data and uses thread-local storage for internal state.
+    
+    // Apply template substitutions to a JSON template using a context
+    // Thread-safe: Can be called concurrently from multiple threads
     nlohmann::json apply(
         const nlohmann::json& template_json,
         const nlohmann::json& context,
         const Options& options = {}
     );
     
+    // Create a reverse template that can reconstruct the original context
+    // Thread-safe: Can be called concurrently from multiple threads
     nlohmann::json create_reverse_template(
         const nlohmann::json& template_json,
         const Options& options = {}
     );
     
+    // Apply reverse template to reconstruct original context from processed result
+    // Thread-safe: Can be called concurrently from multiple threads
     nlohmann::json apply_reverse(
         const nlohmann::json& reverse_template,
         const nlohmann::json& result_json

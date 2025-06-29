@@ -6,44 +6,52 @@ namespace permuto {
         // Constants for template processing
         const size_t INITIAL_RECURSION_DEPTH = 0;
     }
+    
     TemplateProcessor::TemplateProcessor(const Options& options) 
-        : options_(options), parser_(options.start_marker, options.end_marker), 
-          current_depth_(INITIAL_RECURSION_DEPTH) {
+        : options_(options), parser_(options.start_marker, options.end_marker) {
         options_.validate();
+    }
+    
+    ProcessingContext& TemplateProcessor::get_processing_context() const {
+        // Create thread-local context for each thread
+        static thread_local ProcessingContext context;
+        return context;
     }
     
     nlohmann::json TemplateProcessor::process(const nlohmann::json& template_json, 
                                             const nlohmann::json& context) const {
-        // Reset state for new processing
-        cycle_detector_.clear();
-        current_depth_ = INITIAL_RECURSION_DEPTH;
+        // Get thread-local processing context and reset state
+        ProcessingContext& ctx = get_processing_context();
+        ctx.cycle_detector.clear();
+        ctx.current_depth = INITIAL_RECURSION_DEPTH;
         return process_value(template_json, context);
     }
     
     nlohmann::json TemplateProcessor::process_value(const nlohmann::json& value, 
                                                    const nlohmann::json& context) const {
-        enter_recursion();
+        ProcessingContext& ctx = get_processing_context();
+        enter_recursion(ctx);
         
         try {
             if (value.is_string()) {
                 auto result = process_string(value.get<std::string>(), context);
-                exit_recursion();
+                exit_recursion(ctx);
                 return result;
             } else if (value.is_object()) {
                 auto result = process_object(value, context);
-                exit_recursion();
+                exit_recursion(ctx);
                 return result;
             } else if (value.is_array()) {
                 auto result = process_array(value, context);
-                exit_recursion();
+                exit_recursion(ctx);
                 return result;
             } else {
                 // Primitive values (numbers, booleans, null) are returned as-is
-                exit_recursion();
+                exit_recursion(ctx);
                 return value;
             }
         } catch (...) {
-            exit_recursion();
+            exit_recursion(ctx);
             throw;
         }
     }
@@ -144,23 +152,25 @@ namespace permuto {
     
     std::optional<nlohmann::json> TemplateProcessor::resolve_path(const std::string& path, 
                                                                  const nlohmann::json& context) const {
+        ProcessingContext& ctx = get_processing_context();
+        
         // Check for cycles
-        if (cycle_detector_.would_create_cycle(path)) {
-            auto cycle_path = cycle_detector_.get_current_path();
+        if (ctx.cycle_detector.would_create_cycle(path)) {
+            auto cycle_path = ctx.cycle_detector.get_current_path();
             cycle_path.push_back(path);
             throw CycleException("Cycle detected in template processing", cycle_path);
         }
         
         // Add path to cycle detector
-        cycle_detector_.push_path(path);
+        ctx.cycle_detector.push_path(path);
         
         try {
             JsonPointer pointer(path);
             auto result = pointer.resolve(context);
-            cycle_detector_.pop_path();
+            ctx.cycle_detector.pop_path();
             return result;
         } catch (const std::exception&) {
-            cycle_detector_.pop_path();
+            ctx.cycle_detector.pop_path();
             return std::nullopt;
         }
     }
@@ -184,20 +194,20 @@ namespace permuto {
         }
     }
     
-    void TemplateProcessor::check_recursion_limit() const {
-        if (current_depth_ >= options_.max_recursion_depth) {
-            throw RecursionLimitException("Maximum recursion depth exceeded", current_depth_);
+    void TemplateProcessor::check_recursion_limit(ProcessingContext& ctx) const {
+        if (ctx.current_depth >= options_.max_recursion_depth) {
+            throw RecursionLimitException("Maximum recursion depth exceeded", ctx.current_depth);
         }
     }
     
-    void TemplateProcessor::enter_recursion() const {
-        check_recursion_limit();
-        ++current_depth_;
+    void TemplateProcessor::enter_recursion(ProcessingContext& ctx) const {
+        check_recursion_limit(ctx);
+        ++ctx.current_depth;
     }
     
-    void TemplateProcessor::exit_recursion() const {
-        if (current_depth_ > INITIAL_RECURSION_DEPTH) {
-            --current_depth_;
+    void TemplateProcessor::exit_recursion(ProcessingContext& ctx) const {
+        if (ctx.current_depth > INITIAL_RECURSION_DEPTH) {
+            --ctx.current_depth;
         }
     }
 }
