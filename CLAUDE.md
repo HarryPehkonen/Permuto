@@ -150,3 +150,22 @@ The project is divided into 7 phases, tracked in the todo system:
 - Build and integration instructions
 
 **Status Tracking**: Progress is maintained in the todo system. Each phase is marked as pending/in_progress/completed to enable resuming work across sessions.
+
+## C++ Standards (MANDATORY)
+
+All C++ work in this repo MUST follow `CODING_STANDARDS.md` — modern C++17 in
+the spirit of the C++ Core Guidelines (Type/Bounds/Lifetime profiles),
+exceptions allowed for error handling. Binding for every agent run.
+
+Gates before any change is done:
+
+1. Zero-warning build (`-Wall -Wextra -Wpedantic` on the `permuto` target;
+   `-Werror` wiring per Tooling status in CODING_STANDARDS.md).
+2. `ctest --test-dir build` — all tests pass; TDD (failing test first) for
+   every behavior change or bug fix.
+3. Sanitizer gate: build with `-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined
+   -fno-omit-frame-pointer"` and run the tests — clean under ASan+UBSan.
+4. Never introduce raw owning pointers, `new`/`delete`, or
+   `reinterpret_cast`/C-style casts.
+5. If a build fails on a pre-existing warning, fix the warning (small, targeted
+   change) rather than weakening the flags.
