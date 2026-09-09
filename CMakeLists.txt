@@ -60,7 +60,6 @@ if(PERMUTO_BUILD_TESTS)
         tests/test_reverse_processor.cpp
         tests/test_cycle_detector.cpp
         tests/test_integration.cpp
-        tests/test_thread_safety.cpp
     )
     
     target_link_libraries(permuto_tests

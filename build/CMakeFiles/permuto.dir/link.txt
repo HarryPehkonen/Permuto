@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpermuto.a CMakeFiles/permuto.dir/src/template_processor.cpp.o CMakeFiles/permuto.dir/src/placeholder_parser.cpp.o CMakeFiles/permuto.dir/src/json_pointer.cpp.o CMakeFiles/permuto.dir/src/reverse_processor.cpp.o CMakeFiles/permuto.dir/src/cycle_detector.cpp.o CMakeFiles/permuto.dir/src/exceptions.cpp.o CMakeFiles/permuto.dir/src/api.cpp.o
+/usr/bin/ranlib libpermuto.a

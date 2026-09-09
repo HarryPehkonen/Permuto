@@ -1,0 +1,5 @@
+if(EXISTS "/home/harri/hermes-workspace/Permuto/build/permuto_tests[1]_tests.cmake")
+  include("/home/harri/hermes-workspace/Permuto/build/permuto_tests[1]_tests.cmake")
+else()
+  add_test(permuto_tests_NOT_BUILT permuto_tests_NOT_BUILT)
+endif()

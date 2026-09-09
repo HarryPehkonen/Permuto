@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/api_example.dir/link.d CMakeFiles/api_example.dir/examples/api_example.cpp.o -o api_example  libpermuto.a

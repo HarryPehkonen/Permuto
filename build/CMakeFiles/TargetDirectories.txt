@@ -1,0 +1,13 @@
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/permuto.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/permuto-cli.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/permuto_tests.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/api_example.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/mixed_mode_example.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/multi_stage_example.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/test.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/edit_cache.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/rebuild_cache.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/list_install_components.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/install.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/install/local.dir
+/home/harri/hermes-workspace/Permuto/build/CMakeFiles/install/strip.dir

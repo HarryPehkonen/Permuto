@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/multi_stage_example.dir/link.d CMakeFiles/multi_stage_example.dir/examples/multi_stage_example.cpp.o -o multi_stage_example  libpermuto.a
