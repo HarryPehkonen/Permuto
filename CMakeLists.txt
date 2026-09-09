@@ -118,3 +118,10 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/PermutoConfigVersion.cmake"
     DESTINATION lib/cmake/Permuto
 )
+
+# --- CODING_STANDARDS.md: warnings as errors for Permuto's own targets ---
+foreach(permuto_target permuto permuto-cli permuto_tests)
+    if(TARGET ${permuto_target})
+        target_compile_options(${permuto_target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+endforeach()
