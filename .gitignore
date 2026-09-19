@@ -1,0 +1,51 @@
+# Permuto .gitignore
+#
+# NOTE on build/: this repo has the OLD build/ tree committed (130 of its 163 tracked
+# files are build artifacts). build/ is deliberately NOT listed here as a directory
+# ignore: ignoring a directory that is still tracked makes git report "tracked files
+# matched by .gitignore" and hides the problem instead of showing it. The fix is
+# `git rm -r --cached build/` plus a commit, and that is a decision for the repo owner.
+#
+# Until then the gate builds in build-ci/ (see the adaptation notes at the top of
+# tools/ci.sh) and the `tree` stage stays out of the gate's stage list — run
+# `tools/ci.sh tree` to see the honest report, including which of those tracked files
+# the patterns below would ignore.
+
+# --- the gate's own footprint (tools/ci.sh) ---
+build-ci/
+build-ci-*/
+.ci-logs/
+.ci.env
+
+# --- build output ---
+out/
+build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# --- CMake droppings ---
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CMakeUserPresets.json
+
+# --- editor / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+.DS_Store
+Thumbs.db
+
+# --- coverage ---
+*.gcov
+*.gcda
+*.gcno
+coverage/

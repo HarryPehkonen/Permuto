@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <permuto/permuto.hpp>
+#include "version.hpp"
 
 namespace {
     // Command line option constants
@@ -49,7 +50,7 @@ void print_usage(const char* program_name) {
 }
 
 void print_version() {
-    std::cout << "Permuto CLI v1.0.0\n";
+    std::cout << "Permuto CLI v" PERMUTO_VERSION "\n";
     std::cout << "JSON template processing tool\n";
 }
 

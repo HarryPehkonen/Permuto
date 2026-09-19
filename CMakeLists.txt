@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Version header (the artifact-identity invariant) ---
+# project(Permuto VERSION ...) on line 2 is the ONE place the version is written. This
+# generates the second copy the CLI compiles against; tools/ci.sh's `version` stage fails
+# when the two disagree, and when `permuto --version` reports something else.
+configure_file(cmake/version.hpp.in "${CMAKE_BINARY_DIR}/generated/version.hpp" @ONLY)
+
 # Find dependencies
 find_package(nlohmann_json 3.2.0 REQUIRED)
 find_package(Threads REQUIRED)
@@ -45,6 +51,9 @@ endif()
 # CLI executable
 add_executable(permuto-cli cli/main.cpp)
 target_link_libraries(permuto-cli PRIVATE permuto)
+# The generated version header (see configure_file at the top): the CLI prints the
+# version, and it must print the one CMakeLists.txt declares.
+target_include_directories(permuto-cli PRIVATE "${CMAKE_BINARY_DIR}/generated")
 set_target_properties(permuto-cli PROPERTIES OUTPUT_NAME permuto)
 
 # Testing
