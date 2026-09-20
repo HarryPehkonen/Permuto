@@ -1,16 +1,16 @@
 {
   "kit": "AI-DEV-STARTER",
   "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
-  "revision": "a6ad2ea6951c66eb5b7c2eea8757ab8d3311174e",
+  "revision": "951608c2675a2f5c2d0b59d9c19c632d23a043af",
   "recorded_at": "2026-09-20",
   "record_kind": "retroactive",
-  "record_note": "Gate wired by hand on 2026-09-19 (commit 66a5f04, 'plunk in the two-tier gate'), before the kit existed as a git repo, so `revision` is the kit's FIRST PUBLISHED commit and not the exact copy point; the kit's later tidy-baseline fix (t_561f6857) was ported into tools/ci.sh by hand at cbb7248 on 2026-09-20, so this repo already carries the kit's current C++ gate. Every copied artifact is deliberately adapted to Permuto (reasons in the files themselves and in INCIDENTS.md) except .githooks/pre-commit, which is byte-identical. The tidy stage was declined at wiring time and WIRED on 2026-09-20 (b740942) against this repo's own .clang-tidy, so \"this repo does not run tidy\" is no longer true and must not be restored by a sync. NOT a kit copy, and therefore not listed here — do not let a sync install the template over it: CLAUDE.md is this repo's own contract, last edited 2026-09-08 (6ef5375), i.e. before the kit existed; the kit's templates/CLAUDE.md.template is a placeholder shaped like contracts such as this one. The kit's C++ gate is the only kit artifact this repo uses; the Deno and Python artifacts never applied here. LICENSE is byte-identical to the kit's, but it is not listed: this repo's copy dates to its Initial commit (422bba8, 2025-03-28) and both files are the canonical Unlicense text — the kit took LICENSE from repos like this one, so there is nothing to sync in either direction. Rule that keeps this file true: any commit that edits a copied artifact must update that artifact's repo_sha256 in the same commit. **2026-09-20, card t_0cc793fb:** the `kitprobes` stage and `tools/kit-probes/tidy-baseline.sh` were taken from the kit at the revision above — a fix that must propagate ships a probe, and this copy now runs it in its own gate. `revision` moved to that commit because these entries come from it; the earlier entries are still the fb387f2 wiring, and the kit files behind them have not changed between the two commits (the ones that did — `templates/cpp/ci.sh`, `templates/hooks/pre-push` — were ported in this same commit).",
+  "record_note": "Gate wired by hand on 2026-09-19 (commit 66a5f04, 'plunk in the two-tier gate'), before the kit existed as a git repo, so `revision` is the kit's FIRST PUBLISHED commit and not the exact copy point; the kit's later tidy-baseline fix (t_561f6857) was ported into tools/ci.sh by hand at cbb7248 on 2026-09-20, so this repo already carries the kit's current C++ gate. Every copied artifact is deliberately adapted to Permuto (reasons in the files themselves and in INCIDENTS.md) except .githooks/pre-commit, which is byte-identical. The tidy stage was declined at wiring time and WIRED on 2026-09-20 (b740942) against this repo's own .clang-tidy, so \"this repo does not run tidy\" is no longer true and must not be restored by a sync. NOT a kit copy, and therefore not listed here — do not let a sync install the template over it: CLAUDE.md is this repo's own contract, last edited 2026-09-08 (6ef5375), i.e. before the kit existed; the kit's templates/CLAUDE.md.template is a placeholder shaped like contracts such as this one. The kit's C++ gate is the only kit artifact this repo uses; the Deno and Python artifacts never applied here. LICENSE is byte-identical to the kit's, but it is not listed: this repo's copy dates to its Initial commit (422bba8, 2025-03-28) and both files are the canonical Unlicense text — the kit took LICENSE from repos like this one, so there is nothing to sync in either direction. Rule that keeps this file true: any commit that edits a copied artifact must update that artifact's repo_sha256 in the same commit. **2026-09-20, card t_0cc793fb:** the `kitprobes` stage and `tools/kit-probes/tidy-baseline.sh` were taken from the kit at the revision above — a fix that must propagate ships a probe, and this copy now runs it in its own gate. `revision` moved to that commit because these entries come from it; the earlier entries are still the fb387f2 wiring, and the kit files behind them have not changed between the two commits (the ones that did — `templates/cpp/ci.sh`, `templates/hooks/pre-push` — were ported in this same commit). **2026-09-20, later the same day (still card t_0cc793fb):** `revision` moved to 951608c2675a… for two more artifacts from the kit — the gate's dispatch guards (a stage that dies or returns non-zero without a verdict can no longer leave a green run; measured on this gate's own `local -a sources`, see INCIDENTS.md) and that fix's own probe `tools/kit-probes/gate-stage-guards.sh`. Between the previous revision and this one the kit changed only `templates/cpp/ci.sh`, `INCIDENTS.md`, `DESIGN-NOTES.md` and the new probe; the entries behind the other files are unchanged by it.",
   "files": [
     {
       "repo_path": "tools/ci.sh",
       "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "9a5336dbdfbd94e46794c91c7aa895f7a658a174590ecb68393b0fda78a75f70",
-      "kit_sha256": "5d6c89daa3fd1c6ede018501eb9b93f904caf2379de2ed111671189664e9140a",
+      "repo_sha256": "ea34762468a18d7d7166478e076efb0264827cd1f259ffbddacc6fbd7eef44ef",
+      "kit_sha256": "f60599bb44bed25c4b03b996f5526f6d7510ac1b69a6e636359885d0752d3086",
       "adapted": true,
       "adapted_why": "Adapted for this repo; every deviation from the kit is listed in the PERMUTO ADAPTATIONS block at the top of the file: `tidy` runs against this repo's own .clang-tidy (the bug-finding subset — clang-diagnostic-* + clang-analyzer-*, 0 findings, 104-201 s; the two heavier rule sets and why they were rejected are in INCIDENTS.md), stage_version also compares the generated $CI_BUILD_DIR/*ConfigVersion.cmake (a third copy of the version number no kit stage looks at), Permuto's own defaults (CI_VERSION_BINARIES, CI_DEFAULT_STAGES) are set by plain assignment after the kit's block, and --help derives its header range from the PERMUTO ADAPTATIONS marker because the kit's first-blank-line rule would cut the local notes off. The only byte difference that is NOT a Permuto decision is a literal newline inside one printf format string in write_tidy_baseline() (output-identical; all four ports of the 2026-09-20 tidy-baseline fix carry it). The kit's tidy-baseline fix itself (tidy_key on both operands + --write-tidy-baseline) was ported in here by cbb7248, so this copy is not lagging the kit."
     },
@@ -40,8 +40,8 @@
     {
       "repo_path": "INCIDENTS.md",
       "kit_path": "INCIDENTS.md",
-      "repo_sha256": "4e17f86cad798675a4ae48dce1efaa1923e7e6d1f95669f870f9e0c2b4cca10f",
-      "kit_sha256": "28928d4081780f7fd1432112eba4261e32e5a8985964378285b944f9576d88ff",
+      "repo_sha256": "2857712d59619c011de620e19ee69744e10ac74024b05495ee495c0407e8fcce",
+      "kit_sha256": "aef9beb070e319176ef135eed5317ec8caab4bb0192a68a452c9d6841ebd4c45",
       "adapted": true,
       "adapted_why": "Seeded from the kit's rule block (the first 15 lines are byte-identical to the kit's) and then filled with THIS repo's entries — seven at record time, including one marked SUPERSEDED. The kit's own entries are deliberately not copied, so a sync must never overwrite this file with the kit's."
     },
@@ -50,6 +50,13 @@
       "kit_path": "probes/tidy-baseline.sh",
       "repo_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
       "kit_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
+      "adapted": false
+    },
+    {
+      "repo_path": "tools/kit-probes/gate-stage-guards.sh",
+      "kit_path": "probes/gate-stage-guards.sh",
+      "repo_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
+      "kit_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
       "adapted": false
     }
   ]

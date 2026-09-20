@@ -14,6 +14,28 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — the gate printed GATE PASSED with 9 of its 10 stages never run
+
+What broke:        A `git push` re-ran the full tier and printed `all 10 stage(s) passed in 0s`
+                   while only `tree` had really run. `format` died with
+                   `tools/ci.sh: sources: unbound variable` (stage_format, on a touched set with no C++ file) — `set -u` plus
+                   `local -a sources` declared and never filled — and bash unwound out of the
+                   stage function *and* out of the dispatch loop, so the run fell through to the
+                   end, where the verdict is printed unconditionally. The trigger is the common
+                   case, not an exotic one: any commit whose touched set holds no C++ file (a
+                   docs, script or record change) takes that branch.
+Check added:       `tools/ci.sh`: the arrays are declared `=()`, a stage that returns non-zero
+                   without reporting a verdict fails the run, and the verdict is derived from
+                   what RAN (`FAILED: N of M stage(s) did not run`). Carried into this repo as
+                   `tools/kit-probes/gate-stage-guards.sh`, the kit's probe for exactly this fix
+                   (card `t_0cc793fb`; the incident, the measurement and the rationale are in the
+                   kit's INCIDENTS.md), and run by the `kitprobes` stage on every push.
+Why it must stay:  Contract rule 1 is "a stage that did not run must never read as green". The
+                   `BLOCK` lines cover the stages behind a *reported* failure; these guards cover
+                   a stage that dies without reporting anything at all. Without them a green
+                   verdict can sit over a gate that checked almost nothing — the failure the kit
+                   exists to remove, and the one that hid a broken tidy baseline in four repos.
+
 ## 2026-09-20 — `tidy` is wired, against the analyzer-only rule set (the earlier decline, re-measured)
 
 What broke:        This repo ran no clang-tidy: `tidy` was implemented but absent from
