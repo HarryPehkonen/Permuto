@@ -60,6 +60,32 @@ cd "$REPO_ROOT" || exit 1
 # escapes defeat the greps. The escapes this script prints itself are for the human.
 export NO_COLOR=1
 
+# git exports GIT_INDEX_FILE to a hook when the commit is made with a PATHSPEC
+# (`git commit -- <path>`): it names git's TEMPORARY index for that one commit, not this
+# repository's index, and every process a hook starts inherits it. Any `git` command the
+# gate runs inside ANOTHER repository then reads THIS repo's index entries against that
+# repository's object store and dies on the first blob it does not have,
+#     fatal: unable to read 691e2bdafaf312970644391de042d38c2c5972d8
+# which is how a pathspec commit failed its OWN gate at `build` on Computo, naming a
+# dependency update, on a tree that builds fine (cards t_9541aa62 -> t_0a9a0018); it leaves
+# that checkout hollow as well (no `.git/index`, empty worktree).
+#
+# This repo's exposure is stated honestly rather than implied: its own gate has no
+# dependency clone — CMakeLists.txt uses find_package(GTest) and no FetchContent — so no
+# stage of it runs git outside this checkout TODAY. The line is here because the class is
+# general, and this copy already contains an instance of it: tools/kit-probes/ runs git in
+# throwaway repositories in a temp dir by design (that is how the kit's probes work), and
+# anything a stage shells out to — a future FetchContent, a tool that clones — inherits the
+# variable the same way. One line in the prologue is cheaper than re-diagnosing it.
+#
+# Unset it once, here, rather than `env -u` per command: the variable reaches everything the
+# gate starts, so a per-invocation fix covers the instance and leaves the class. Measured
+# before choosing the place (a real pathspec commit in a throwaway clone, with the gate's own
+# stages run both ways): every input the `tree`/`format` stages read is identical and their
+# output is byte-identical. Ported from the kit's templates/cpp/ci.sh at f9c3300;
+# tools/kit-probes/git-index-file.sh holds this copy to it.
+unset GIT_INDEX_FILE
+
 # ---------------------------------------------------------------- defaults + config
 CI_JOBS=${CI_JOBS:-$(nproc 2>/dev/null || echo 4)}
 CI_BUILD_DIR=${CI_BUILD_DIR:-build}
