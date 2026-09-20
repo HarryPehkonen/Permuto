@@ -1,0 +1,49 @@
+{
+  "kit": "AI-DEV-STARTER",
+  "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
+  "revision": "fb387f2044989f76bb2fe234cef39e85ac050328",
+  "recorded_at": "2026-09-20",
+  "record_kind": "retroactive",
+  "record_note": "Gate wired by hand on 2026-09-19 (commit 66a5f04, 'plunk in the two-tier gate'), before the kit existed as a git repo, so `revision` is the kit's FIRST PUBLISHED commit and not the exact copy point; the kit's later tidy-baseline fix (t_561f6857) was ported into tools/ci.sh by hand at cbb7248 on 2026-09-20, so this repo already carries the kit's current C++ gate. Every copied artifact is deliberately adapted to Permuto (reasons in the files themselves and in INCIDENTS.md) except .githooks/pre-commit, which is byte-identical. The tidy stage was declined at wiring time and WIRED on 2026-09-20 (b740942) against this repo's own .clang-tidy, so \"this repo does not run tidy\" is no longer true and must not be restored by a sync. NOT a kit copy, and therefore not listed here — do not let a sync install the template over it: CLAUDE.md is this repo's own contract, last edited 2026-09-08 (6ef5375), i.e. before the kit existed; the kit's templates/CLAUDE.md.template is a placeholder shaped like contracts such as this one. The kit's C++ gate is the only kit artifact this repo uses; the Deno and Python artifacts never applied here. LICENSE is byte-identical to the kit's, but it is not listed: this repo's copy dates to its Initial commit (422bba8, 2025-03-28) and both files are the canonical Unlicense text — the kit took LICENSE from repos like this one, so there is nothing to sync in either direction. Rule that keeps this file true: any commit that edits a copied artifact must update that artifact's repo_sha256 in the same commit.",
+  "files": [
+    {
+      "repo_path": "tools/ci.sh",
+      "kit_path": "templates/cpp/ci.sh",
+      "repo_sha256": "07b57a89f771d327ccec54922fa13b123332e53e278c1e50a7bdd86ab1c70daf",
+      "kit_sha256": "dcccb2066b856ec4bbbe04e98d74c37fffe5372a1486cab47623f403b9f613d1",
+      "adapted": true,
+      "adapted_why": "Adapted for this repo; every deviation from the kit is listed in the PERMUTO ADAPTATIONS block at the top of the file: `tidy` runs against this repo's own .clang-tidy (the bug-finding subset — clang-diagnostic-* + clang-analyzer-*, 0 findings, 104-201 s; the two heavier rule sets and why they were rejected are in INCIDENTS.md), stage_version also compares the generated $CI_BUILD_DIR/*ConfigVersion.cmake (a third copy of the version number no kit stage looks at), Permuto's own defaults (CI_VERSION_BINARIES, CI_DEFAULT_STAGES) are set by plain assignment after the kit's block, and --help derives its header range from the PERMUTO ADAPTATIONS marker because the kit's first-blank-line rule would cut the local notes off. The only byte difference that is NOT a Permuto decision is a literal newline inside one printf format string in write_tidy_baseline() (output-identical; all four ports of the 2026-09-20 tidy-baseline fix carry it). The kit's tidy-baseline fix itself (tidy_key on both operands + --write-tidy-baseline) was ported in here by cbb7248, so this copy is not lagging the kit."
+    },
+    {
+      "repo_path": ".githooks/pre-commit",
+      "kit_path": "templates/hooks/pre-commit",
+      "repo_sha256": "e304ddcb48e216029c8e77402d927695dae4895532f6bf12d1ecb54604b652d8",
+      "kit_sha256": "e304ddcb48e216029c8e77402d927695dae4895532f6bf12d1ecb54604b652d8",
+      "adapted": false
+    },
+    {
+      "repo_path": ".githooks/pre-push",
+      "kit_path": "templates/hooks/pre-push",
+      "repo_sha256": "42139e9cc8aca2be79d2e80902abef05fd49b06a59ea2d349864b4a7a03afd02",
+      "kit_sha256": "2c82ed7099fc5687795264521be327fdda23e8c02eadd3ac12bd9667186c0d18",
+      "adapted": true,
+      "adapted_why": "The stage list is the kit's own verbatim (--require-clean tree format build tests version asan tsan tidy pristine); the only difference is the nine-line PERMUTO comment above the exec, which records what `tidy` certifies here (.clang-tidy's bug-finding subset) and where the clean-tree check lived while the `tree` stage could not pass."
+    },
+    {
+      "repo_path": ".ci.env.example",
+      "kit_path": "templates/cpp/.ci.env.example",
+      "repo_sha256": "b4cd6e1fa21eec24e55b7442350b85f73b26611464e65f9a5ba2774fb5fef35f",
+      "kit_sha256": "777a750755a10d79674d2ff7605130ceed14668416b44c3acefd73d819e43308",
+      "adapted": true,
+      "adapted_why": "Permuto's real config: CI_DEFAULT_STAGES spelled out with tidy included, CI_VERSION_BINARIES=$CI_BUILD_DIR/permuto, the note that the third version copy (the generated *ConfigVersion.cmake) deliberately has no knob, the kit's optional CI_ASAN_TEST_CMD example block absent (nothing here filters the suite under a sanitizer: `grep -rn GTEST_FILTER tests/ .ci.env.example` finds nothing, and there is no RSS-measuring or wall-clock test), and a PERMUTO NOTES section at the end recording what is wired, the rule set `tidy` runs and the two heavier rule sets rejected with their measured numbers."
+    },
+    {
+      "repo_path": "INCIDENTS.md",
+      "kit_path": "INCIDENTS.md",
+      "repo_sha256": "4e17f86cad798675a4ae48dce1efaa1923e7e6d1f95669f870f9e0c2b4cca10f",
+      "kit_sha256": "28928d4081780f7fd1432112eba4261e32e5a8985964378285b944f9576d88ff",
+      "adapted": true,
+      "adapted_why": "Seeded from the kit's rule block (the first 15 lines are byte-identical to the kit's) and then filled with THIS repo's entries — seven at record time, including one marked SUPERSEDED. The kit's own entries are deliberately not copied, so a sync must never overwrite this file with the kit's."
+    }
+  ]
+}
