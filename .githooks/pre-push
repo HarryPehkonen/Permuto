@@ -18,23 +18,17 @@ set -uo pipefail
 root=$(git rev-parse --show-toplevel) || exit 1
 
 if [ -x "$root/tools/ci.sh" ]; then
-    # PERMUTO: the stage list is this repo's own (see the adaptation notes at the top of
-    # tools/ci.sh). tree, format and tidy are NOT in it: tree cannot pass while the old
-    # build/ tree is committed, format has no .clang-format to enforce yet, and tidy has
-    # no .clang-tidy. What runs here is what this repo can actually certify.
+    # PERMUTO: this repo's own stage list (see the adaptation notes at the top of
+    # tools/ci.sh). `tidy` is not in it — there is no .clang-tidy here, and this repo's
+    # CODING_STANDARDS.md scopes tidy to repos where it is configured.
     #
-    # --require-clean is passed through for the day `tree` comes back, but it does
-    # nothing without that stage, and "do not publish an uncommitted tree" is the one
-    # thing this hook must not lose — so the check lives here instead.
-    if [ -n "$(git -C "$root" status --porcelain --untracked-files=no)" ]; then
-        printf 'pre-push: uncommitted changes to tracked files — commit or stash them first:\n' >&2
-        git -C "$root" status --porcelain --untracked-files=no >&2
-        printf '\nGATE FAILED\n' >&2
-        exit 1
-    fi
+    # --require-clean is the "never publish an uncommitted tree" rule. Until 2026-09-20
+    # the check had to live in this hook, because the `tree` stage it belongs to could
+    # not pass while the old build/ tree was committed; with build/ untracked, `tree` is
+    # wired in and the rule is back where a human can also run it: `tools/ci.sh tree`.
     exec "$root/tools/ci.sh" \
         --require-clean \
-        build tests version asan tsan pristine
+        tree format build tests version asan tsan pristine
 fi
 
 if [ -x "$root/scripts/gate.sh" ]; then

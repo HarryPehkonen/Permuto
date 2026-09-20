@@ -18,30 +18,23 @@
 # Two tiers, because a C++ full run is minutes and a commit cannot afford minutes:
 #
 #   fast  (pre-commit)  build tests
-#   full  (pre-push)    build tests version asan tsan pristine   (what this repo can do)
+#   full  (pre-push)    --require-clean tree format build tests version asan tsan pristine
 #
 # PERMUTO ADAPTATIONS (every deviation from the kit is listed here, with the reason):
-#   * build dirs are build-ci/ + build-ci-asan/ + build-ci-tsan/, NOT build/. This repo
-#     has the OLD build/ tree COMMITTED (130 of its 163 tracked files are build
-#     artifacts), so a gate that builds in build/ rewrites tracked files and turns a
-#     clean tree dirty on every run. build-ci* is ignored instead.
-#   * no `tree` stage in the tiers: tree fails at HEAD because of that committed build/
-#     (either "build/ is not ignored", or — once it IS ignored — "tracked files matched
-#     by .gitignore"). Unfixable without untracking those 130 files, which is Harri's
-#     call, not the gate's. The stage is still implemented and still reports the truth:
-#     run `tools/ci.sh tree` to see it.
-#   * no `format` stage in the tiers: the repo has no .clang-format (CODING_STANDARDS.md
-#     refers to one that does not exist), and under the closest matching configuration
-#     all 23 of its sources drift — cli/main.cpp alone would need 83 of its 157 lines
-#     rewritten. Format-on-touch on a repo in that state is a one-time whole-tree format
-#     commit first; that decision is Harri's. `tools/ci.sh format` still works.
-#   * no `tidy` stage in the tiers: there is no .clang-tidy, and this repo's
-#     CODING_STANDARDS.md scopes tidy to repos where it is configured ("no NEW findings
-#     vs baseline (where tidy is configured)").
-#   * pristine builds in ci-build/ inside the temp checkout (CI_PRISTINE_BUILD_DIR),
-#     because the committed build/CMakeCache.txt makes CMake refuse a different source
-#     directory on the same path.
+#   * `tidy` is NOT in the tiers: this repo has no .clang-tidy, and its CODING_STANDARDS.md
+#     scopes tidy to repos where it is configured. That is a decision with a measurement
+#     behind it, not an omission — see INCIDENTS.md and CODING_STANDARDS.md, and --help
+#     says so too. The stage itself is implemented and reports the truth: run
+#     `tools/ci.sh tidy` the day a .clang-tidy lands.
+#   * stage_version also compares the generated CMake package-version file
+#     (write_basic_package_version_file -> $CI_BUILD_DIR/*ConfigVersion.cmake): a THIRD
+#     copy of the version number that no kit stage ever looked at. See INCIDENTS.md.
 #   * no fuzz stage: the repo has no fuzz target yet.
+#   (Until 2026-09-20 this block also had to explain ci-build/ and build-ci*/ build dirs
+#    and the missing tree and format stages. All of that existed only because the OLD
+#    build/ tree was committed; untracking it removed the cause, so the adaptations went
+#    with it. If build/ is ever committed again, `tools/ci.sh tree` fails — the rule has a
+#    check behind it now.)
 #
 # Configuration lives in .ci.env (gitignored, optional); every knob has a default here,
 # so the repo works with no config at all. See .ci.env.example.
@@ -72,7 +65,6 @@ CI_TSAN_BUILD_DIR=${CI_TSAN_BUILD_DIR:-build-tsan}
 CI_LOG_DIR=${CI_LOG_DIR:-.ci-logs}
 CI_STRICT_TOOLS=${CI_STRICT_TOOLS:-0}           # 1 = a missing tool fails instead of SKIPping
 CI_KEEP_TMP=${CI_KEEP_TMP:-0}                   # 1 = keep the pristine temp dir for inspection
-CI_PRISTINE_BUILD_DIR=${CI_PRISTINE_BUILD_DIR:-build}   # relative to the temp checkout
 CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"tree format build tests version asan tsan tidy pristine"}
 CI_TIDY_BASELINE=${CI_TIDY_BASELINE:-.ci/tidy-baseline.txt}
 CI_BUILD_TYPE=${CI_BUILD_TYPE:-Debug}
@@ -90,19 +82,15 @@ CI_TEST_CMD=${CI_TEST_CMD:-"ctest --test-dir \$CI_BUILD_DIR --output-on-failure 
 # ${VAR:-default} form would keep its own value because it is set first. .ci.env is
 # sourced after this block, so a config file still wins over everything here.
 #
-# build-ci*, not build/: this repo has the old build/ tree committed, so a gate that
-# builds in build/ rewrites tracked files and dirties the tree it is meant to certify.
-CI_BUILD_DIR=build-ci
-CI_ASAN_BUILD_DIR=build-ci-asan
-CI_TSAN_BUILD_DIR=build-ci-tsan
-CI_PRISTINE_BUILD_DIR=ci-build
-# Both derive from CI_BUILD_DIR, so they have to be re-stated after it changes.
-CI_VERSION_HEADER="$CI_BUILD_DIR/generated/version.hpp"
+# The build dirs are the kit's own (build/, build-asan/, build-tsan/) and CI_VERSION_HEADER
+# stays at the kit default ($CI_BUILD_DIR/generated/version.hpp), because
+# configure_file(cmake/version.hpp.in ...) writes the second copy of the number there.
+# The binary that has to answer --version with the same number:
 CI_VERSION_BINARIES="$CI_BUILD_DIR/permuto"
-# What this repo can actually certify today: tree, format and tidy are excluded, with
-# reasons in the adaptation notes at the top (committed build/, no .clang-format, no
-# .clang-tidy). Both hooks run this list; the fast tier stays "build tests".
-CI_DEFAULT_STAGES="build tests version asan tsan pristine"
+# What this repo can certify: every stage except tidy, which has no .clang-tidy to run
+# against (measured reasons in the adaptation notes at the top). Both hooks run this list;
+# the fast tier stays "build tests".
+CI_DEFAULT_STAGES="tree format build tests version asan tsan pristine"
 
 if [ -f .ci.env ]; then
     # shellcheck disable=SC1091
@@ -120,9 +108,10 @@ RAN_STAGES=()
 RUN_TMP_DIRS=()
 
 usage() {
-    # 2,19 = the kit's own header comment; the PERMUTO ADAPTATIONS block below it is
-    # repo-local and would only push the stage list off the screen.
-    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+    # 2,21 = the kit's own header comment, ending at the two-tier line; the PERMUTO
+    # ADAPTATIONS block that follows is repo-local and would only push the stage list
+    # off the screen.
+    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Stages:
@@ -141,6 +130,11 @@ Stages:
               optional; with none, tidy must be clean)
   pristine    git archive HEAD -> temp dir -> configure, build, test: proves the
               COMMITTED tree is complete (catches files that are uncommitted or ignored)
+
+tidy is NOT in this repo's default stage list: there is no .clang-tidy here, and
+CODING_STANDARDS.md scopes tidy to repos where it is configured. The measurement behind
+that decision is in INCIDENTS.md; the PERMUTO ADAPTATIONS notes at the top of this file
+say the same thing.
 
 Options:
   --require-clean     make the tree stage fail when tracked files have uncommitted edits
@@ -390,6 +384,43 @@ stage_version() {
     fi
     printf '    %s == %s == %s\n' "CMakeLists.txt" "$header" "$cmake_version"
 
+    # --- every OTHER copy this repo has: the generated CMake package-version file -----
+    # write_basic_package_version_file() writes set(PACKAGE_VERSION "x.y.z") into the
+    # build dir. It is generated from project(VERSION), so it is right by construction —
+    # until someone edits the wrong line there or hands the macro a version of its own,
+    # and then a downstream find_package() is answered by a number this repo never
+    # checked. (This repo's call reads `VERSION ${PACKAGE_VERSION}`, which is unset:
+    # CMake's module falls back to PROJECT_VERSION, which is why the file is correct
+    # today. That fallback is exactly the thing not to take on trust.)
+    # maxdepth 1 is where CMakePackageConfigHelpers writes when it is given a bare
+    # filename (this repo's shape). Searching the whole build tree would also pick up a
+    # FetchContent'd dependency's *ConfigVersion.cmake — a version that is not ours to
+    # police, and a check that would then fail on somebody else's number.
+    if grep -qE '(^|[^#[:alnum:]_])write_basic_package_version_file' CMakeLists.txt; then
+        local -a pkg_version_files=()
+        mapfile -t pkg_version_files < <(find "$CI_BUILD_DIR" -maxdepth 1 -name '*ConfigVersion.cmake' -type f | sort)
+        if [ "${#pkg_version_files[@]}" -eq 0 ]; then
+            ci_fail version "CMakeLists.txt calls write_basic_package_version_file() and $CI_BUILD_DIR (top level) holds no *ConfigVersion.cmake — that copy of the number was NOT checked (run the build stage first, or teach this stage where the file is written)"
+        fi
+        local pf pkg_version bad_copies=0
+        for pf in "${pkg_version_files[@]}"; do
+            pkg_version=$(sed -n 's/^set(PACKAGE_VERSION "\([0-9][0-9.]*\)".*/\1/p' "$pf" | head -1)
+            if [ -z "$pkg_version" ]; then
+                ci_fail version "$pf holds no set(PACKAGE_VERSION \"x.y.z\") — the copy could not be read at all"
+            fi
+            if [ "$pkg_version" != "$cmake_version" ]; then
+                printf '    %s says %s\n' "${pf#"$REPO_ROOT"/}" "$pkg_version"
+                bad_copies=$((bad_copies + 1))
+            fi
+        done
+        if [ "$bad_copies" -gt 0 ]; then
+            ci_fail version "$bad_copies generated package-version file(s) disagree with project(VERSION) $cmake_version — that file is what a downstream find_package() reads"
+        fi
+        printf '    %s package-version file(s) also say %s\n' "${#pkg_version_files[@]}" "$cmake_version"
+    else
+        printf '    (CMakeLists.txt does not call write_basic_package_version_file: no generated package version to compare)\n'
+    fi
+
     # And, optionally, the binaries have to report it: a version nobody can ask for is
     # not a version. Off by default because every project names its executables
     # differently — set CI_VERSION_BINARIES="$CI_BUILD_DIR/myapp*" in .ci.env when the
@@ -529,14 +560,14 @@ stage_pristine() {
     printf '    HEAD checked out: %s files\n' "$(find "$tmp" -type f | wc -l)"
 
     # shellcheck disable=SC2086
-    cmake -S "$tmp" -B "$tmp/$CI_PRISTINE_BUILD_DIR" -DCMAKE_BUILD_TYPE="$CI_BUILD_TYPE" \
+    cmake -S "$tmp" -B "$tmp/build" -DCMAKE_BUILD_TYPE="$CI_BUILD_TYPE" \
         ${CI_CMAKE_FLAGS:-} > "$CI_LOG_DIR/pristine-configure.log" 2>&1 \
         || ci_fail pristine "a fresh checkout of HEAD does not even configure (a needed file is not committed)" "$CI_LOG_DIR/pristine-configure.log"
-    cmake --build "$tmp/$CI_PRISTINE_BUILD_DIR" -j "$CI_JOBS" > "$CI_LOG_DIR/pristine-build.log" 2>&1 \
+    cmake --build "$tmp/build" -j "$CI_JOBS" > "$CI_LOG_DIR/pristine-build.log" 2>&1 \
         || ci_fail pristine "a fresh checkout of HEAD does not build" "$CI_LOG_DIR/pristine-build.log"
     local saved="$CI_TEST_CMD"
-    CI_TEST_CMD="$(printf '%s' "$saved" | sed "s|\$CI_BUILD_DIR|$tmp/$CI_PRISTINE_BUILD_DIR|g")"
-    if ! run_tests "$tmp/$CI_PRISTINE_BUILD_DIR" "$CI_LOG_DIR/pristine-tests.log"; then
+    CI_TEST_CMD="$(printf '%s' "$saved" | sed "s|\$CI_BUILD_DIR|$tmp/build|g")"
+    if ! run_tests "$tmp/build" "$CI_LOG_DIR/pristine-tests.log"; then
         ci_fail pristine "tests fail on a fresh checkout of HEAD" "$CI_LOG_DIR/pristine-tests.log"
     fi
     CI_TEST_CMD="$saved"

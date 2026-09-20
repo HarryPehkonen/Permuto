@@ -44,20 +44,62 @@ Reference: https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
 
 ## Definition of done (agent checklist)
 
+- [ ] `bash tools/ci.sh --require-clean` prints `GATE PASSED` (that one command runs
+      every check below, in the order the push gate runs them)
 - [ ] Zero-warning build (see Tooling status — `-Werror` where wired)
 - [ ] All tests pass
 - [ ] Tests pass under ASan+UBSan
-- [ ] clang-tidy — no NEW findings vs baseline (where tidy is configured)
+- [ ] clang-tidy — no NEW findings vs baseline (where tidy is configured; NOT configured
+      in this repo — see Tooling status for the measured decision)
 - [ ] No raw owning pointers / `new` / `reinterpret_cast` introduced
 - [ ] Test written first (RED) for every behavior change or bug fix
 
-## Tooling status (this repo, as of 2026-09-08)
+## Tooling status (this repo, as of 2026-09-20)
 
-- Warnings: `-Wall -Wextra -Wpedantic` already on the `permuto` target.
-  `-Werror` pending a verified zero-warning baseline.
-- Sanitizers: `cmake -B build-asan -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined
+Everything below is wired into `tools/ci.sh`, which is what `.githooks/pre-commit` (fast
+tier: `build tests`) and `.githooks/pre-push` (full tier) run. Run it by hand at any time:
+
+    bash tools/ci.sh                  # the whole gate, in order
+    bash tools/ci.sh --list           # the stages and the effective default list
+    bash tools/ci.sh --require-clean  # ...and fail on an uncommitted tracked file
+
+- **Formatting:** `.clang-format` (the suite file: LLVM base, 4-space, 100 columns) and
+  the `format` stage — every file a branch touches must conform. Fix a file with
+  `clang-format -i <file>`.
+- **Warnings:** `-Wall -Wextra -Wpedantic` on the `permuto` target, `-Werror` on all three
+  own targets (`permuto`, `permuto-cli`, `permuto_tests`), and the `build` stage also
+  counts `warning:` lines in its log, so a target that never got `-Werror` cannot slip
+  through. Zero warnings is the verified baseline.
+- **Tests:** `ctest --test-dir build` (PERMUTO_BUILD_TESTS, default ON) — 58 tests.
+- **Sanitizers:** the `asan` (ASan+UBSan) and `tsan` (ThreadSanitizer) stages build in
+  `build-asan/` and `build-tsan/` and run the same suite. By hand:
+  `cmake -B build-asan -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined
   -fno-omit-frame-pointer" && cmake --build build-asan && ctest --test-dir build-asan`.
-- Tests: `ctest --test-dir build` (PERMUTO_BUILD_TESTS, default ON).
+- **Tree:** the `tree` stage — every file is either committed or ignored, the gate's own
+  footprint (`build/`, `build-*/`, `.ci-logs/`, `.ci.env`) is ignored, and with
+  `--require-clean` no tracked file has uncommitted edits. Build output is never
+  committed here; `INCIDENTS.md` says why that has a check behind it.
+- **Version identity:** the `version` stage compares `project(VERSION)` in CMakeLists.txt
+  against the generated `build/generated/version.hpp`, the generated
+  `build/*ConfigVersion.cmake` that a downstream `find_package()` reads, and
+  `permuto --version`. All three copies are one edit apart in CMakeLists.txt.
+- **clang-tidy: deliberately NOT adopted in this repo.** There is no `.clang-tidy`, and the
+  checklist item above is scoped to repos where tidy IS configured. Measured 2026-09-20
+  against the sibling repo's house `.clang-tidy`: 451 findings over the 17 translation
+  units and 387 s of wall clock on 4 cores — about six times this repo's whole gate. The
+  two largest groups are house-style choices rather than defects
+  (`modernize-use-trailing-return-type` 220, `modernize-use-nodiscard` 136), and the set's
+  most safety-relevant check, `bugprone-unchecked-optional-access` (9 findings), is a false
+  positive in all 9 cases — GoogleTest `ASSERT_TRUE(opt.has_value())` guards it cannot see
+  through. Zero findings would only be reachable with an exclusion list naming every check
+  that fires (a rule set that certifies nothing) or a baseline file, which the kit forbids
+  for a config that was never adopted. The `tidy` stage is implemented: `tools/ci.sh tidy`
+  reports the truth on demand, and wiring it the day a `.clang-tidy` lands is a one-line
+  change to the stage list. Reasons: `INCIDENTS.md`.
+- **Never weaken a stage to make it pass; a gate that fails open is the thing this tooling
+  exists to prevent.** Every deviation from the AI-DEV-STARTER kit is listed in the
+  adaptation notes at the top of `tools/ci.sh` with its reason, and every rule change gets
+  an entry in `INCIDENTS.md` next to the check that enforces it.
 
 ## Upstream reference
 

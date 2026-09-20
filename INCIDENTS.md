@@ -14,6 +14,69 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — a third copy of the version number existed and nothing compared it
+
+What broke:        `write_basic_package_version_file(PermutoConfigVersion.cmake VERSION
+                   ${PACKAGE_VERSION})` at the bottom of CMakeLists.txt reads like a bug
+                   (`PACKAGE_VERSION` is never set in that file) but is not one: CMake's
+                   module falls back to `PROJECT_VERSION`, so the generated
+                   `build/PermutoConfigVersion.cmake` really does contain
+                   `set(PACKAGE_VERSION "1.0.0")`. It is, though, a THIRD copy of the
+                   number — the one a downstream `find_package(Permuto 1.0.0)` is answered
+                   by — and nothing in the gate compared it to the other two.
+Check added:       stage_version in `tools/ci.sh`: if CMakeLists.txt calls
+                   `write_basic_package_version_file` at all, the top level of
+                   `$CI_BUILD_DIR` must hold at least one `*ConfigVersion.cmake` and every
+                   one of them must carry the same number as `project(VERSION)`. Not
+                   finding the file is a FAIL, not a SKIP — "the copy was not checked" is
+                   the state this stage exists to rule out. There is deliberately no knob
+                   for it (a knob would be a way to leave the copy unchecked), and the
+                   search is top-level-only so a FetchContent'd dependency's own
+                   ConfigVersion.cmake can never be mistaken for ours.
+Why it must stay:  Without the block the gate certifies "one version number" while a second
+                   artifact makes the same claim to everyone who consumes the installed
+                   package. Proved by desynchronising it on purpose: with
+                   `build/PermutoConfigVersion.cmake` hand-edited to 9.9.9,
+                   `tools/ci.sh version` fails with "1 generated package-version file(s)
+                   disagree with project(VERSION) 1.0.0"; re-running the build stage
+                   restores green.
+
+---
+
+## 2026-09-20 — `tidy` is absent from the gate for measured reasons, not by omission
+
+What broke:        Nothing broke. This entry exists because "the stage is missing" and
+                   "the stage was deliberately declined" look identical from the outside —
+                   the only difference is whether somebody wrote down the measurement.
+                   Measured first, with the sibling repo's house `.clang-tidy` (the closest
+                   thing to this project's standard that exists): 451 findings over the 17
+                   translation units, 387 s of wall clock on 4 cores — about six times this
+                   repo's entire gate. The two biggest groups are house-style choices rather
+                   than defects (`modernize-use-trailing-return-type` 220,
+                   `modernize-use-nodiscard` 136), and the set's most safety-relevant check,
+                   `bugprone-unchecked-optional-access` (9 findings), is a false positive in
+                   all 9 cases: they are GoogleTest `ASSERT_TRUE(opt.has_value())` guards,
+                   which that check cannot see through. The rest is subjective style or a
+                   decision about the published API (`performance-enum-size` wants a
+                   different underlying type for `MissingKeyBehavior`).
+Check added:       The stage stays implemented (`tools/ci.sh tidy` reports the truth on
+                   demand) and is deliberately absent from `CI_DEFAULT_STAGES`, from
+                   `.githooks/pre-push`, and from the default list `--help` prints — with
+                   the measurement recorded in CODING_STANDARDS.md's Tooling status, in
+                   `.ci.env.example`, and in the adaptation notes at the top of
+                   `tools/ci.sh`, which is where a future reader looks first. There is no
+                   baseline file, on purpose: a baseline tolerates findings you inherited,
+                   it does not bless a rule set that was never adopted.
+Why it must stay:  Two failure modes are prevented at once. Adding tidy with the house rule
+                   set makes every push seven times slower for findings nobody agreed to
+                   tolerate; adding it with the exclusions that would make today's tree
+                   pass is a stage that certifies nothing while printing green — the
+                   fails-open shape this kit exists to remove. When someone writes a
+                   `.clang-tidy` this repo can live with, wiring it is a one-line change to
+                   the stage list, and the gate grows.
+
+---
+
 ## 2026-09-20 — CODING_STANDARDS.md required a .clang-format that did not exist, so nothing checked formatting
 
 What broke:        CODING_STANDARDS.md's Style section says "clang-format per the repo's
