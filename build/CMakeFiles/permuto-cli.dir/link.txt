@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/permuto-cli.dir/link.d "CMakeFiles/permuto-cli.dir/cli/main.cpp.o" -o permuto  libpermuto.a
