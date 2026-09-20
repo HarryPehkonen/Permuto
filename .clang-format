@@ -1,0 +1,38 @@
+# Permuto house style — the suite file (LLVM base, 4-space indent, 100 columns). One
+# style across the suite means code reads the same wherever it is moved between the
+# repos. Verified 2026-09-20: identical to jsonTools/.clang-format; Computo's and JSOM's
+# carry the same rules plus a trailing YAML document-end marker (`...`).
+#
+# Added 2026-09-20: CODING_STANDARDS.md said "clang-format per the repo's .clang-format"
+# and this repo had no such file, so the format gate (tools/ci.sh, stage `format`) could
+# not run at all. The tree was formatted with this file in one mechanical commit
+# ("style: ..."), then the stage was wired. See INCIDENTS.md.
+#
+# Verify it is still the suite file, from this repo:
+#   diff <(sed -n '/^---$/,$p' .clang-format) <(sed -n '/^---$/,$p' ../jsonTools/.clang-format)
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# --- Core Indentation and Bracing ---
+IndentWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+BraceWrapping:
+  AfterFunction:   true
+ContinuationIndentWidth: 4
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: Never
+PointerAlignment: Left
+
+# --- Line Breaking and Wrapping ---
+ColumnLimit: 100
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: All
+BreakBeforeTernaryOperators: true
+AlignOperands: Align
+AllowShortFunctionsOnASingleLine: All
+
+# --- Other Important Deviations ---
+SpaceBeforeParens: ControlStatements

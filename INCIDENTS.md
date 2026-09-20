@@ -14,6 +14,37 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — CODING_STANDARDS.md required a .clang-format that did not exist, so nothing checked formatting
+
+What broke:        CODING_STANDARDS.md's Style section says "clang-format per the repo's
+                   .clang-format" and its Definition of done implies formatting is checked,
+                   but the file did not exist: the gate's `format` stage could not enforce
+                   anything, and with no configuration clang-format applies its own defaults,
+                   which are not this project's style. Measured before the fix, against the
+                   suite's house style: all 23 sources drifted — 1162 insertions / 1169
+                   deletions. Every source in the repo, which is why the stage had been left
+                   out of the stage list with a note instead of being fixed.
+Check added:       `.clang-format` (byte-for-byte the suite file: LLVM base, 4-space indent,
+                   100 columns — the same file Computo, JSOM and jsonTools use), the whole
+                   tree formatted in one mechanical commit, and `format` wired into
+                   CI_DEFAULT_STAGES and .githooks/pre-push, so a push whose branch leaves
+                   any file it touched unformatted now fails.
+                   The mechanical commit was verified to be layout-only rather than assumed
+                   to be: the pre-format sources and the formatted sources were built at the
+                   SAME path with the SAME flags, and all 18 object files plus libpermuto.a
+                   were byte-identical (58/58 tests pass either way). The same path matters —
+                   a Google Test object embeds __FILE__/__LINE__, so building the two
+                   versions in different directories makes test objects differ for reasons
+                   that have nothing to do with the reformat.
+Why it must stay:  Removing `.clang-format` or dropping `format` from the stage list puts
+                   the repo back where it was: a written standard with nothing behind it, and
+                   every file free to drift toward whatever the next editor prefers. The
+                   whole-tree reformat is only safe to keep BECAUSE the object-file check
+                   says it changed no code — if .clang-format is ever replaced, redo that
+                   check instead of trusting the size of the diff.
+
+---
+
 ## 2026-09-20 — the repo's own build tree was committed, so the gate could not check the tree
 
 What broke:        `tools/ci.sh tree` could not pass at HEAD, and not for a reason the
