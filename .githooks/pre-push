@@ -29,7 +29,7 @@ if [ -x "$root/tools/ci.sh" ]; then
     # wired in and the rule is back where a human can also run it: `tools/ci.sh tree`.
     exec "$root/tools/ci.sh" \
         --require-clean \
-        tree format build tests version asan tsan tidy pristine
+        tree format kitprobes build tests version asan tsan tidy pristine
 fi
 
 if [ -x "$root/scripts/gate.sh" ]; then
