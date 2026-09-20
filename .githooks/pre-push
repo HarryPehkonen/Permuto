@@ -19,8 +19,9 @@ root=$(git rev-parse --show-toplevel) || exit 1
 
 if [ -x "$root/tools/ci.sh" ]; then
     # PERMUTO: this repo's own stage list (see the adaptation notes at the top of
-    # tools/ci.sh). `tidy` is not in it — there is no .clang-tidy here, and this repo's
-    # CODING_STANDARDS.md scopes tidy to repos where it is configured.
+    # tools/ci.sh). `tidy` IS in it: it runs against this repo's .clang-tidy, which enables
+    # the bug-finding subset (clang-diagnostic-* + clang-analyzer-*) and no style families —
+    # the measurement behind that choice is in INCIDENTS.md and .ci.env.example.
     #
     # --require-clean is the "never publish an uncommitted tree" rule. Until 2026-09-20
     # the check had to live in this hook, because the `tree` stage it belongs to could
@@ -28,7 +29,7 @@ if [ -x "$root/tools/ci.sh" ]; then
     # wired in and the rule is back where a human can also run it: `tools/ci.sh tree`.
     exec "$root/tools/ci.sh" \
         --require-clean \
-        tree format build tests version asan tsan pristine
+        tree format build tests version asan tsan tidy pristine
 fi
 
 if [ -x "$root/scripts/gate.sh" ]; then

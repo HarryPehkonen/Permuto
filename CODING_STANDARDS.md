@@ -49,8 +49,9 @@ Reference: https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
 - [ ] Zero-warning build (see Tooling status — `-Werror` where wired)
 - [ ] All tests pass
 - [ ] Tests pass under ASan+UBSan
-- [ ] clang-tidy — no NEW findings vs baseline (where tidy is configured; NOT configured
-      in this repo — see Tooling status for the measured decision)
+- [ ] clang-tidy — the `tidy` stage is green with no findings at all (this repo's
+      `.clang-tidy` enables the bug-finding subset and there is no baseline file; see
+      Tooling status)
 - [ ] No raw owning pointers / `new` / `reinterpret_cast` introduced
 - [ ] Test written first (RED) for every behavior change or bug fix
 
@@ -83,19 +84,23 @@ tier: `build tests`) and `.githooks/pre-push` (full tier) run. Run it by hand at
   against the generated `build/generated/version.hpp`, the generated
   `build/*ConfigVersion.cmake` that a downstream `find_package()` reads, and
   `permuto --version`. All three copies are one edit apart in CMakeLists.txt.
-- **clang-tidy: deliberately NOT adopted in this repo.** There is no `.clang-tidy`, and the
-  checklist item above is scoped to repos where tidy IS configured. Measured 2026-09-20
-  against the sibling repo's house `.clang-tidy`: 451 findings over the 17 translation
-  units and 387 s of wall clock on 4 cores — about six times this repo's whole gate. The
-  two largest groups are house-style choices rather than defects
-  (`modernize-use-trailing-return-type` 220, `modernize-use-nodiscard` 136), and the set's
-  most safety-relevant check, `bugprone-unchecked-optional-access` (9 findings), is a false
-  positive in all 9 cases — GoogleTest `ASSERT_TRUE(opt.has_value())` guards it cannot see
-  through. Zero findings would only be reachable with an exclusion list naming every check
-  that fires (a rule set that certifies nothing) or a baseline file, which the kit forbids
-  for a config that was never adopted. The `tidy` stage is implemented: `tools/ci.sh tidy`
-  reports the truth on demand, and wiring it the day a `.clang-tidy` lands is a one-line
-  change to the stage list. Reasons: `INCIDENTS.md`.
+- **clang-tidy: wired, against the bug-finding subset.** `.clang-tidy` enables
+  `clang-diagnostic-*` (the compiler diagnostics clang-tidy sees while parsing) and
+  `clang-analyzer-*` (the Clang Static Analyzer), and no style families; the `tidy` stage is
+  in `CI_DEFAULT_STAGES` and in `.githooks/pre-push`. Zero findings are required — there is
+  no `.ci/tidy-baseline.txt`, because a baseline is for findings you inherited, not for a rule
+  set nobody agreed to. Measured 2026-09-20 on this tree (17 translation units, 4 cores):
+  **0 findings** in **104-201 s** with that set (cache-dependent), against **451 findings /
+  387 s** for the stock style families and **53 findings / 204 s** for the suite's value-only
+  set (`-*,bugprone-*,performance-*`). The style families are what `.clang-format` plus review
+  already own; adopting the value-only set here is an OPEN decision with those numbers
+  attached. The analyzer earned the wiring: the single finding it reported was real — a dead
+  store in `examples/api_example.cpp` that made the example print a failed round trip and then
+  report success with exit status 0. Cost: `tidy` is roughly three times the rest of the gate
+  (~104-201 s against ~37-66 s; the whole 9-stage gate ran in 141 s with warm caches), paid on
+  push only — the fast tier is still `build tests` — and it is the cheapest tidy in the suite.
+  Reasons, and the set the earlier "tidy is absent" decision was measured against:
+  `INCIDENTS.md`, `.ci.env.example`, and the adaptation notes at the top of `tools/ci.sh`.
 - **Never weaken a stage to make it pass; a gate that fails open is the thing this tooling
   exists to prevent.** Every deviation from the AI-DEV-STARTER kit is listed in the
   adaptation notes at the top of `tools/ci.sh` with its reason, and every rule change gets

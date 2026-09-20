@@ -1,0 +1,41 @@
+# clang-tidy configuration — what the `tidy` stage of tools/ci.sh enforces.
+#
+# THE BUG-FINDING SUBSET, written down explicitly instead of being left to the tool's
+# default. `clang-diagnostic-*` is the compiler diagnostics clang-tidy sees while it parses;
+# `clang-analyzer-*` is the Clang Static Analyzer, the path-sensitive checker. Both find
+# defects; neither has an opinion about style. Pinning the pair here means the check set
+# cannot silently change when a new clang-tidy is installed — LLVM's built-in default is this
+# same pair today (measured 2026-09-20: `clang-tidy --dump-config` with no config file in
+# this repo prints `Checks: 'clang-diagnostic-*,clang-analyzer-*'`), but "today's default" is
+# not a configuration.
+#
+# WHAT IS DELIBERATELY NOT ENABLED — measured 2026-09-20 on this tree, 17 translation units,
+# 4 cores, so that the next reader does not have to re-measure it:
+#   * the stock families (-*,bugprone-*,performance-*,readability-*,modernize-*,portability-*):
+#     451 findings in 387 s, 220 of them modernize-use-trailing-return-type and 136
+#     modernize-use-nodiscard. Style, which .clang-format plus review already own — and a gate
+#     that is red on the day it is wired gets ignored.
+#   * the suite's value-only set (-*,bugprone-*,performance-*), which Computo, JSOM and
+#     jsonTools run: 53 findings in 204 s here. 9 are the known
+#     bugprone-unchecked-optional-access false positives on GoogleTest
+#     `ASSERT_TRUE(opt.has_value())` guards, 11 are ONE decision about the published API
+#     (performance-enum-size wants a narrower base type for MissingKeyBehavior, reported once
+#     per TU that includes the header), and the rest are minor. Adopting it here is an OPEN
+#     decision, not a forgotten one; until it is made, this repo's tidy certifies the
+#     analyzer's defects and nothing else. Numbers and the decision record:
+#     INCIDENTS.md, .ci.env.example.
+#
+# There is no baseline file, on purpose: with the check set below this tree is clean, and a
+# baseline tolerates findings you inherited — it does not bless a rule set. If a finding ever
+# does have to be accepted, accept it through the gate (`tools/ci.sh --write-tidy-baseline`),
+# never by hand.
+Checks: 'clang-diagnostic-*,clang-analyzer-*'
+
+# Which INCLUDED files get reported. A positive pattern for this repo's own tree, the same
+# shape Computo/JSOM/jsonTools use, and for the same reason: the paths in the compilation
+# database are absolute and matched as substrings, so `Permuto/(src|include|tests|examples|cli)/`
+# cannot appear inside a dependency's path while it does appear in any checkout of this repo
+# (the directory is named Permuto in every clone). Diagnostics raised in the analysed .cpp
+# itself are reported regardless of this filter, so relocating a clone cannot lose this repo's
+# own source findings — only header findings depend on the directory still being named Permuto.
+HeaderFilterRegex: 'Permuto/(src|include|tests|examples|cli)/.*\.(hpp|cpp)$'

@@ -140,16 +140,20 @@ int main() {
         auto reconstructed = permuto::apply_reverse(reverse_template, forward_result);
         std::cout << "\nReconstructed Context:\n" << reconstructed.dump(2) << "\n";
 
-        // Verify round-trip integrity
-        bool round_trip_success = true;
-        if (reconstructed["user"]["name"] == context["user"]["name"]
-            && reconstructed["user"]["id"] == context["user"]["id"]
-            && reconstructed["request"]["max_tokens"] == context["request"]["max_tokens"]
-            && reconstructed["request"]["temperature"] == context["request"]["temperature"]) {
+        // Verify round-trip integrity. The result is carried to the end of this example on
+        // purpose: a failed round trip must not be followed by a success banner and exit
+        // status 0. (The store this flag used to take was never read — the example found the
+        // failure, printed it, and then reported success anyway. clang-analyzer's DeadStores
+        // check is what found THAT; see INCIDENTS.md, 2026-09-20.)
+        const bool round_trip_ok
+            = (reconstructed["user"]["name"] == context["user"]["name"]
+               && reconstructed["user"]["id"] == context["user"]["id"]
+               && reconstructed["request"]["max_tokens"] == context["request"]["max_tokens"]
+               && reconstructed["request"]["temperature"] == context["request"]["temperature"]);
+        if (round_trip_ok) {
             std::cout << "\n✓ Round-trip integrity verified!\n";
         } else {
             std::cout << "\n✗ Round-trip integrity failed!\n";
-            round_trip_success = false;
         }
 
         // ===== Example 5: Error Handling =====
@@ -196,6 +200,11 @@ int main() {
         std::cout << "Custom Delimiters Result:\n" << custom_result.dump(2) << "\n";
 
         print_section("Example Complete");
+        if (!round_trip_ok) {
+            std::cout << "All examples ran, but the round trip in Example 4 did NOT "
+                         "reconstruct the context — see the failure above.\n";
+            return 1;
+        }
         std::cout << "All examples completed successfully!\n";
 
         return 0;

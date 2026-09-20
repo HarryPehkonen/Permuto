@@ -14,6 +14,90 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — `tidy` is wired, against the analyzer-only rule set (the earlier decline, re-measured)
+
+What broke:        This repo ran no clang-tidy: `tidy` was implemented but absent from
+                   `CI_DEFAULT_STAGES`, from `.githooks/pre-push` and from `--help`, on the
+                   recorded grounds that the rule set it had been measured with — the sibling
+                   repo's then "house" `.clang-tidy`, `-*,bugprone-*,performance-*,
+                   readability-*,modernize-*,portability-*` — produced 451 findings and 387 s
+                   on this tree: style, not defects. That measurement was sound for THAT
+                   config, and it is still the number for it. What it never settled is the
+                   config that runs when there is no `.clang-tidy` at all: clang-tidy 19 then
+                   analyses `clang-diagnostic-*,clang-analyzer-*` — the compiler diagnostics
+                   plus the Clang Static Analyzer, a bug-finding set with no style opinion in
+                   it — and on this tree that set reported exactly ONE finding, and it was
+                   real (the entry below). "No `.clang-tidy`" was never what stopped the stage
+                   from running; it was the reason the stage and its rule set were
+                   undocumented.
+Check added:       `.clang-tidy` pins the bug-finding set explicitly (`Checks:
+                   'clang-diagnostic-*,clang-analyzer-*'`, plus a `HeaderFilterRegex` scoped
+                   to this repo's own tree), `tidy` is in `CI_DEFAULT_STAGES` and in
+                   `.githooks/pre-push`, and every surface that carried the old decision —
+                   `CODING_STANDARDS.md`, `.ci.env.example`, the adaptation notes and
+                   `--help` in `tools/ci.sh`, and this file — carries the new one. No baseline
+                   file, on purpose: with this set the tree is clean, and a baseline tolerates
+                   findings you inherited, it does not bless a rule set. The gate passes with
+                   `tidy` in it (`tools/ci.sh --require-clean`, 9 stages).
+Why it must stay:  Two failure modes, and this configuration avoids both. Wiring tidy with
+                   the style families is a gate that is red the day it is wired — 451 findings
+                   nobody agreed to tolerate — and an always-red stage gets `--no-verify`.
+                   Wiring it with an exclusion list or a baseline file is a stage that
+                   certifies nothing while printing green. The analyzer set is reachable at
+                   zero findings with neither: it needs no exclusions, and on its first honest
+                   run it found a real defect, so the only way to satisfy it is to fix the
+                   code. Deleting `tidy` from the list, or deleting `.clang-tidy` (which
+                   silently restores whatever the installed clang-tidy's default happens to
+                   be), puts the repo back to "the analyzer never runs on a push".
+                   Measured 2026-09-20, this tree, 17 translation units, 4 cores: 0 findings
+                   with this set in 104-201 s (cache-dependent: 104 s warm, 201 s cold right
+                   after a fresh build; the whole 9-stage gate ran in 141 s warm); 451
+                   findings / 387 s for the stock families; 53
+                   findings / 204 s for the suite's value-only set that Computo/JSOM/jsonTools
+                   run — which stays an OPEN decision here, with its numbers, not a rejected
+                   one (9 of its 53 are the known `bugprone-unchecked-optional-access` false
+                   positives on GoogleTest `ASSERT_TRUE(opt.has_value())` guards, 11 are one
+                   decision about `MissingKeyBehavior`'s base type). Cost, stated plainly:
+                   roughly three times the rest of the gate (~104-201 s against ~37-66 s),
+                   paid on push only (the fast tier is still `build tests`) — the cheapest
+                   tidy in the suite.
+                   Confirmed the same day that the stage catches a NEW finding: a probe header
+                   inside `include/permuto/` with an unread store was reported at
+                   `include/permuto/probe_tmp.hpp:10:9`, and probe files were removed again.
+
+---
+
+## 2026-09-20 — the example found a failed round trip, printed it, and then reported success
+
+What broke:        `examples/api_example.cpp` verified its own reverse round trip, printed
+                   "✗ Round-trip integrity failed!" when the reconstructed context did not
+                   match — and then, because the flag it set was never read, printed
+                   "All examples completed successfully!" and exited 0 anyway. Proved rather
+                   than asserted: HEAD's version with one comparison forced to fail prints the
+                   ✗ line AND the success banner and exits 0, while the fixed version prints
+                   the ✗ line, says the round trip did not reconstruct the context, and exits
+                   1 (both probe builds kept in the evidence bundle). The library was correct
+                   in both runs — the happy path's output is unchanged — so the defect was the
+                   example teaching readers that a failed invariant is nothing to act on.
+                   The `tidy` stage found it on a tree nobody had edited, on the day it was
+                   wired: `examples/api_example.cpp:152:13: warning: Value stored to
+                   'round_trip_success' is never read [clang-analyzer-deadcode.DeadStores]`.
+Check added:       The round-trip result is computed once into `round_trip_ok` and used for
+                   BOTH the message and the exit status (`return 1` when it is false), so the
+                   example can no longer claim success after failing its own check. The static
+                   check behind that shape is the now-wired `tidy` stage (clang-analyzer
+                   reports a value stored and never read); the behavioural check is the same
+                   code path forced to fail in a throwaway probe build, not an assumption.
+Why it must stay:  Deleting the `if (!round_trip_ok)` block restores the original bug exactly:
+                   a demo that exits 0 on a broken invariant. Examples are the only
+                   documentation a reader can run, so "it detected something and then said the
+                   run was fine" is the most expensive kind of wrong answer this repo can ship
+                   — and it is exactly the fails-open shape the rest of this tooling exists to
+                   remove. The unread store that produced it is what the analyzer check
+                   reports, on any file, not just this one.
+
+---
+
 ## 2026-09-20 — the tidy baseline could never match, so the tidy stage could not pass
 
 What broke:        `tools/ci.sh`'s tidy stage compared the baseline one-sided: the log side
@@ -32,11 +116,11 @@ Check added:       `tidy_key()` in `tools/ci.sh` normalises BOTH operands (the r
                    as a child and writes their log through that same function, so the
                    documented way to accept findings cannot drift from the way they are
                    compared. `.ci.env.example` documents the flag instead of the raw capture.
-Why it must stay:  This repo wires no tidy (no `.clang-tidy` — see the entry below), so the
-                   defect was latent here; the day a `.clang-tidy` lands and tidy is wired,
-                   the first baseline would have made the stage red forever on a tree nobody
-                   edited, and an always-red stage gets `--no-verify`, which is worse than no
-                   stage. The port is not a licence to accept findings: no
+Why it must stay:  This repo wires tidy now (see the entries above), so the defect is live
+                   rather than latent here: with a baseline present, a one-sided comparison
+                   would have made the stage red forever on a tree nobody edited, and an
+                   always-red stage gets `--no-verify`, which is worse than no stage. The
+                   port is not a licence to accept findings: no
                    `.ci/tidy-baseline.txt` is committed here, so the stage still demands a
                    clean run.
 
@@ -72,6 +156,14 @@ Why it must stay:  Without the block the gate certifies "one version number" whi
 ---
 
 ## 2026-09-20 — `tidy` is absent from the gate for measured reasons, not by omission
+
+**SUPERSEDED later the same day — tidy is now WIRED, against the analyzer-only set (see the
+two entries above). Read this entry for the reasoning about STYLE FAMILIES, which is why the
+shipped rule set is not one; do not read the numbers below as describing what this repo's
+`tidy` runs now, and note that the config they were measured with (the stock families) was
+replaced in Computo by `aff17cf` the same day, so it is not what any repo in the suite runs
+any more. The set that ships is `clang-diagnostic-*` + `clang-analyzer-*`: 0 findings /
+104-201 s here.**
 
 What broke:        Nothing broke. This entry exists because "the stage is missing" and
                    "the stage was deliberately declined" look identical from the outside —

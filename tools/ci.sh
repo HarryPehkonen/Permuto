@@ -19,14 +19,16 @@
 # Two tiers, because a C++ full run is minutes and a commit cannot afford minutes:
 #
 #   fast  (pre-commit)  build tests
-#   full  (pre-push)    --require-clean tree format build tests version asan tsan pristine
+#   full  (pre-push)    --require-clean tree format build tests version asan tsan tidy pristine
 #
 # PERMUTO ADAPTATIONS (every deviation from the kit is listed here, with the reason):
-#   * `tidy` is NOT in the tiers: this repo has no .clang-tidy, and its CODING_STANDARDS.md
-#     scopes tidy to repos where it is configured. That is a decision with a measurement
-#     behind it, not an omission — see INCIDENTS.md and CODING_STANDARDS.md, and --help
-#     says so too. The stage itself is implemented and reports the truth: run
-#     `tools/ci.sh tidy` the day a .clang-tidy lands.
+#   * `tidy` runs against this repo's own `.clang-tidy`, which enables the BUG-FINDING subset
+#     (clang-diagnostic-* + clang-analyzer-*) and no style families. Wire-date measurement:
+#     0 findings over 17 translation units in 104-201 s on 4 cores (cache-dependent: 201 s
+#     cold after a fresh build, 104 s warm) — and the one finding it did report on the day it
+#     was wired was real (a dead store in examples/api_example.cpp that made the example claim
+#     success after a failed round trip). The two heavier rule sets and why they were rejected,
+#     with numbers, are in INCIDENTS.md and .ci.env.example.
 #   * stage_version also compares the generated CMake package-version file
 #     (write_basic_package_version_file -> $CI_BUILD_DIR/*ConfigVersion.cmake): a THIRD
 #     copy of the version number that no kit stage ever looked at. See INCIDENTS.md.
@@ -88,10 +90,11 @@ CI_TEST_CMD=${CI_TEST_CMD:-"ctest --test-dir \$CI_BUILD_DIR --output-on-failure 
 # configure_file(cmake/version.hpp.in ...) writes the second copy of the number there.
 # The binary that has to answer --version with the same number:
 CI_VERSION_BINARIES="$CI_BUILD_DIR/permuto"
-# What this repo can certify: every stage except tidy, which has no .clang-tidy to run
-# against (measured reasons in the adaptation notes at the top). Both hooks run this list;
-# the fast tier stays "build tests".
-CI_DEFAULT_STAGES="tree format build tests version asan tsan pristine"
+# What this repo can certify: every stage the kit ships, `tidy` included — it runs against
+# this repo's own .clang-tidy (the bug-finding subset; see the adaptation notes at the top).
+# Both hooks run this list (the pre-push hook spells it out), and the fast tier stays
+# "build tests".
+CI_DEFAULT_STAGES="tree format build tests version asan tsan tidy pristine"
 
 if [ -f .ci.env ]; then
     # shellcheck disable=SC1091
@@ -138,10 +141,11 @@ Stages:
   pristine    git archive HEAD -> temp dir -> configure, build, test: proves the
               COMMITTED tree is complete (catches files that are uncommitted or ignored)
 
-tidy is NOT in this repo's default stage list: there is no .clang-tidy here, and
-CODING_STANDARDS.md scopes tidy to repos where it is configured. The measurement behind
-that decision is in INCIDENTS.md; the PERMUTO ADAPTATIONS notes at the top of this file
-say the same thing.
+tidy runs here against this repo's own .clang-tidy, which enables the bug-finding subset
+(clang-diagnostic-* + clang-analyzer-*) and no style families, and it IS in the default
+stage list. The measurement behind that choice — and the two heavier rule sets that were
+rejected, with their numbers — is in INCIDENTS.md; the PERMUTO ADAPTATIONS notes at the top
+of this file say the same thing.
 
 Options:
   --require-clean     make the tree stage fail when tracked files have uncommitted edits
