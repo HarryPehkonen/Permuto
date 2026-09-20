@@ -14,6 +14,34 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — the tidy baseline could never match, so the tidy stage could not pass
+
+What broke:        `tools/ci.sh`'s tidy stage compared the baseline one-sided: the log side
+                   had `:line:column` stripped (`sed 's/:[0-9]*:[0-9]*:/:/'`) while
+                   `$CI_TIDY_BASELINE` was read raw — and clang-tidy names the file with the
+                   ABSOLUTE path CMake wrote into the compile database. A baseline captured
+                   in one checkout (with the recipe `.ci.env.example` documented: `tools/ci.sh
+                   tidy && grep -E "warning:|error:" .ci-logs/tidy.log | sort -u >
+                   .ci/tidy-baseline.txt`) therefore matched nothing once the same commit was
+                   checked out at another path — the nightly clean checkout, a colleague's
+                   machine — and every baselined finding read as new.
+Check added:       `tidy_key()` in `tools/ci.sh` normalises BOTH operands (the repo-root
+                   prefix and `:line:column` are stripped) and both are de-duplicated before
+                   `comm -13`; and the baseline is produced by the gate itself,
+                   `tools/ci.sh --write-tidy-baseline`, which runs the real build+tidy stages
+                   as a child and writes their log through that same function, so the
+                   documented way to accept findings cannot drift from the way they are
+                   compared. `.ci.env.example` documents the flag instead of the raw capture.
+Why it must stay:  This repo wires no tidy (no `.clang-tidy` — see the entry below), so the
+                   defect was latent here; the day a `.clang-tidy` lands and tidy is wired,
+                   the first baseline would have made the stage red forever on a tree nobody
+                   edited, and an always-red stage gets `--no-verify`, which is worse than no
+                   stage. The port is not a licence to accept findings: no
+                   `.ci/tidy-baseline.txt` is committed here, so the stage still demands a
+                   clean run.
+
+---
+
 ## 2026-09-20 — a third copy of the version number existed and nothing compared it
 
 What broke:        `write_basic_package_version_file(PermutoConfigVersion.cmake VERSION
