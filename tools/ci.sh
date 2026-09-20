@@ -108,10 +108,13 @@ RAN_STAGES=()
 RUN_TMP_DIRS=()
 
 usage() {
-    # 2,21 = the kit's own header comment, ending at the two-tier line; the PERMUTO
-    # ADAPTATIONS block that follows is repo-local and would only push the stage list
-    # off the screen.
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    # The kit's own header comment, stopping before the PERMUTO ADAPTATIONS block below
+    # it. Derived from that marker line rather than from a hard-coded line number: this
+    # header already grew once (the two-tier line, 2026-09-20) and a stale range silently
+    # prints the wrong slice of the file into --help. The kit derives its end from the
+    # first blank line, which cannot work here — the repo-local adaptation notes sit inside
+    # the same comment block.
+    awk 'NR > 1 { if (/^# PERMUTO ADAPTATIONS/) exit; sub(/^# ?/, ""); print }' "$0"
     cat <<'EOF'
 
 Stages:
