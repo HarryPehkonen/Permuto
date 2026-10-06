@@ -15,6 +15,11 @@ out/
 # --- the gate's own footprint (tools/ci.sh) ---
 .ci-logs/
 .ci.env
+# The fuzz stage's corpus: libFuzzer writes every interesting input and every crash
+# artifact here, so it grows on every run and is machine-specific. fuzz/seeds/ is the
+# tracked half (hand-written, from the documentation examples) and is NOT ignored.
+# build-fuzz/ is already covered by build-*/ above.
+fuzz/corpus/
 
 # --- object files and libraries ---
 *.o

@@ -19,7 +19,7 @@
 # Two tiers, because a C++ full run is minutes and a commit cannot afford minutes:
 #
 #   fast  (pre-commit)  build tests
-#   full  (pre-push)    --require-clean tree format build tests version asan tsan tidy pristine
+#   full  (pre-push)    --require-clean tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package
 #
 # PERMUTO ADAPTATIONS (every deviation from the kit is listed here, with the reason):
 #   * `tidy` runs against this repo's own `.clang-tidy`, which enables the BUG-FINDING subset
@@ -32,7 +32,34 @@
 #   * stage_version also compares the generated CMake package-version file
 #     (write_basic_package_version_file -> $CI_BUILD_DIR/*ConfigVersion.cmake): a THIRD
 #     copy of the version number that no kit stage ever looked at. See INCIDENTS.md.
-#   * no fuzz stage: the repo has no fuzz target yet.
+#   * `fuzz` — a libFuzzer harness (fuzz/fuzz_permuto.cpp) whose oracle is this library's own
+#     documented round-trip guarantee: apply() -> create_reverse_template() -> apply_reverse()
+#     must reproduce the context, asserted only under the conditions the guarantee is claimed
+#     for (they are spelled out in the harness header). It needs clang++ — libFuzzer ships as
+#     clang's -fsanitize=fuzzer and has no GCC equivalent — so a machine without clang SKIPs
+#     the stage unless CI_STRICT_TOOLS=1, exactly like clang-format and clang-tidy.
+#     Budget: CI_FUZZ_SECONDS, default 10 s. A commit and a push must not cost minutes — this
+#     gate is already ~3 minutes with `tidy` in it, and a fuzzer's value comes from hours, not
+#     from the 60 s nobody will wait for at a push prompt. Ten seconds is a REGRESSION check
+#     (the corpus in fuzz/corpus/ keeps what earlier runs found, and the seeds are re-read
+#     every time), not a campaign; long campaigns belong on a nightly run with a bigger
+#     -max_total_time against the same corpus.
+#     The stage runs the binary TWICE. First a seed smoke: -runs=0 over fuzz/seeds with
+#     PERMUTO_FUZZ_REQUIRE_IDENTITY=1, which fails when no input reached the round-trip
+#     assert. That is the live-oracle guard — a harness that never reaches its property looks
+#     exactly like a harness that always passes, and the ten stages before this one all had
+#     that shape with respect to hostile input. Then the timed campaign.
+#   * `docs` — one rule: no file in CI_DOCS_FILES quotes a test count. This repo advertised
+#     "65 tests" in a badge, a README section and CLAUDE.md against a suite of 58, and
+#     CLAUDE.md's Project Overview still described a design phase that had ended — all of it
+#     green, because no stage has ever read a document. Counts drift silently; describing
+#     coverage does not. INCIDENTS.md is exempt on purpose (dated measurements, above).
+#   * `package` — the kit has no such stage. The install tree and PermutoConfig.cmake are a
+#     promise to consumers and NOTHING checked them: the config file was generated with
+#     configure_file(), so @PACKAGE_INIT@ expanded to nothing and every downstream
+#     find_package(Permuto) died on "Unknown CMake command check_required_components"
+#     (2026-09-20, INCIDENTS.md). It needs a SYSTEM nlohmann/json, because the consumer resolves
+#     Permuto's dependency through find_dependency; with none it SKIPs and says why.
 #   (Until 2026-09-20 this block also had to explain ci-build/ and build-ci*/ build dirs
 #    and the missing tree and format stages. All of that existed only because the OLD
 #    build/ tree was committed; untracking it removed the cause, so the adaptations went
@@ -91,10 +118,26 @@ CI_JOBS=${CI_JOBS:-$(nproc 2>/dev/null || echo 4)}
 CI_BUILD_DIR=${CI_BUILD_DIR:-build}
 CI_ASAN_BUILD_DIR=${CI_ASAN_BUILD_DIR:-build-asan}
 CI_TSAN_BUILD_DIR=${CI_TSAN_BUILD_DIR:-build-tsan}
+# --- fuzz stage (see the adaptation notes at the top) ---
+# 10 s, because this runs on every push and a push must not cost minutes. It is a
+# regression check over an accumulated corpus, not a campaign.
+CI_FUZZ_SECONDS=${CI_FUZZ_SECONDS:-10}
+# Its own build dir: the harness build is clang-only and instruments the LIBRARY too,
+# so it can never share build/ with the normal gcc build. build-*/ is already ignored.
+CI_FUZZ_BUILD_DIR=${CI_FUZZ_BUILD_DIR:-build-fuzz}
+# The corpus libFuzzer grows and re-reads. Gitignored; fuzz/seeds/ is tracked instead.
+CI_FUZZ_CORPUS=${CI_FUZZ_CORPUS:-fuzz/corpus}
+# --- docs stage ---
+# The documents that describe this repo's CURRENT state, and therefore must not quote a test
+# count: the count is one `ctest -N` away and drifts the moment a test is added, while the
+# prose never notices. INCIDENTS.md is deliberately absent — its numbers are dated
+# measurements of past events, and keeping them in step with today's suite would mean
+# requiring them to be wrong. `.ci.env` can override this list.
+CI_DOCS_FILES=${CI_DOCS_FILES:-"README.md CLAUDE.md CODING_STANDARDS.md TECHNICAL_DETAILS.md REQUIREMENTS.md"}
 CI_LOG_DIR=${CI_LOG_DIR:-.ci-logs}
 CI_STRICT_TOOLS=${CI_STRICT_TOOLS:-0}           # 1 = a missing tool fails instead of SKIPping
 CI_KEEP_TMP=${CI_KEEP_TMP:-0}                   # 1 = keep the pristine temp dir for inspection
-CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"tree format kitprobes build tests version asan tsan tidy pristine"}
+CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package"}
 CI_TIDY_BASELINE=${CI_TIDY_BASELINE:-.ci/tidy-baseline.txt}
 CI_BUILD_TYPE=${CI_BUILD_TYPE:-Debug}
 # The source set the format and tidy stages own. Extend for your layout.
@@ -120,7 +163,7 @@ CI_VERSION_BINARIES="$CI_BUILD_DIR/permuto"
 # this repo's own .clang-tidy (the bug-finding subset; see the adaptation notes at the top).
 # Both hooks run this list (the pre-push hook spells it out), and the fast tier stays
 # "build tests".
-CI_DEFAULT_STAGES="tree format kitprobes build tests version asan tsan tidy pristine"
+CI_DEFAULT_STAGES="tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package"
 
 if [ -f .ci.env ]; then
     # shellcheck disable=SC1091
@@ -152,6 +195,9 @@ Stages:
   tree        every file committed or ignored; .gitignore audit; the gate's own
               footprint (build dirs, logs, .ci.env) is ignored; --require-clean also
               fails on uncommitted changes to tracked files
+  docs        no document in CI_DOCS_FILES quotes a test count: the suite is the only
+              tally, and a number in prose drifts silently. INCIDENTS.md is exempt (its
+              numbers are dated measurements of past events)
   format      clang-format drift — dry run against the repo .clang-format
   kitprobes   the kit fixes this copy claims to carry, held to their contracts: every
               script in tools/kit-probes/ checks one kit fix in THIS gate script by name
@@ -165,12 +211,22 @@ Stages:
               build generates/uses, and the number every binary prints for --version
   asan        separate build dir, ASan+UBSan, same suite
   tsan        separate build dir, ThreadSanitizer, same suite
+  fuzz        libFuzzer (clang only), CI_FUZZ_SECONDS seconds against fuzz/corpus +
+              fuzz/seeds. The oracle is this library's documented round trip:
+              apply -> create_reverse_template -> apply_reverse must reproduce the
+              context. A seed smoke runs first with PERMUTO_FUZZ_REQUIRE_IDENTITY=1
+              and fails when NO input reached that assert, so a corpus that cannot
+              exercise the property fails instead of passing silently
   tidy        clang-tidy, only NEW findings vs CI_TIDY_BASELINE (a baseline file is
               optional; with none, tidy must be clean). Findings compare line-blind and
               clone-blind — capture the baseline with --write-tidy-baseline, never by
               hand (a raw copy of the log matches nothing: see .ci.env.example)
   pristine    git archive HEAD -> temp dir -> configure, build, test: proves the
               COMMITTED tree is complete (catches files that are uncommitted or ignored)
+  package     installs the built tree to a temp prefix and builds a two-file consumer
+              against it with find_package(Permuto): proves the install tree and its CMake
+              package files are consumable, not merely installable. Needs a system
+              nlohmann/json (the consumer resolves it via find_dependency); SKIPs if absent
 
 tidy runs here against this repo's own .clang-tidy, which enables the bug-finding subset
 (clang-diagnostic-* + clang-analyzer-*) and no style families, and it IS in the default
@@ -350,6 +406,48 @@ stage_tree() {
     fi
     printf '    gate footprint (build dirs, %s, .ci.env) is ignored\n' "$CI_LOG_DIR"
     ci_pass tree
+}
+
+stage_docs() {
+    ci_begin "docs (no doc quotes a test count)"
+    # One rule, and it exists because its absence was invisible: README's badge read
+    # "tests-65/65" and CLAUDE.md advertised "65 tests" against a suite of 58, and CLAUDE.md
+    # still described the project as being in a design phase after it was implemented. No
+    # stage had ever read a document, so every one of those statements was green. A number in
+    # prose is a claim with no check behind it; the suite is the only tally.
+    # The full rationale is in INCIDENTS.md.
+    local -a files=()
+    local file
+    for file in $CI_DOCS_FILES; do
+        if [ -f "$file" ]; then
+            files+=("$file")
+        fi
+    done
+    if [ "${#files[@]}" -eq 0 ]; then
+        ci_fail docs "none of CI_DOCS_FILES exists ($CI_DOCS_FILES) — this stage would check nothing and still pass"
+    fi
+
+    local offenders=0
+    : > "$CI_LOG_DIR/docs.log"
+    for file in "${files[@]}"; do
+        # Every shape a tally can take: the badge (tests-58%2F58), prose ("58 tests",
+        # "58 unit tests", "58 TESTS"), the label form ("Total Tests: 66", "tests: 58") and
+        # the parenthetical ("tests (58)"). -H so the log names the file: grep prints no
+        # filename when it is handed a single one, and an offender you cannot locate is a
+        # finding you will not fix. The first version of this pattern was porous — the
+        # verifier walked "Total Tests: 66" and "58 unit tests" straight past it (C6 in
+        # /tmp/permuto-verification.md).
+        if grep -nHEi 'tests-[0-9]|[0-9]+[[:space:]]+([[:alpha:]]+[[:space:]]+)*tests?\b|tests?[[:space:]]*:[[:space:]]*[0-9]+|tests?[[:space:]]*\([[:space:]]*[0-9]+' "$file" \
+            >> "$CI_LOG_DIR/docs.log"; then
+            offenders=$((offenders + 1))
+        fi
+    done
+    if [ "$offenders" -ne 0 ]; then
+        sed 's/^/      /' "$CI_LOG_DIR/docs.log"
+        ci_fail docs "$offenders doc file(s) quote a test count — the suite is the tally; say what the tests cover instead" "$CI_LOG_DIR/docs.log"
+    fi
+    printf '    %s doc file(s) describe the project without quoting a test count\n' "${#files[@]}"
+    ci_pass docs
 }
 
 stage_format() {
@@ -570,6 +668,83 @@ stage_tsan() {
     ci_pass tsan
 }
 
+stage_fuzz() {
+    ci_begin "fuzz (libFuzzer, round-trip oracle, ${CI_FUZZ_SECONDS}s)"
+    # libFuzzer is clang's (-fsanitize=fuzzer); there is no GCC equivalent, so a machine
+    # without clang++ SKIPs — same rule as clang-format and clang-tidy.
+    require_tool clang++ fuzz || return 0
+    local started
+    started=$(date +%s)
+
+    # libFuzzer REFUSES TO START when a corpus directory does not exist, and a fresh
+    # clone has none (fuzz/corpus/ is gitignored on purpose: it is generated).
+    mkdir -p "$CI_FUZZ_CORPUS"
+
+    # Never leave CMAKE_BUILD_TYPE empty here: an empty build type is -O0, which is 5-20x
+    # less fuzzing for the same ten seconds.
+    # shellcheck disable=SC2086
+    cmake -S . -B "$CI_FUZZ_BUILD_DIR" \
+        -DPERMUTO_BUILD_FUZZING=ON \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DPERMUTO_BUILD_TESTS=OFF \
+        -DPERMUTO_BUILD_EXAMPLES=OFF \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        ${CI_CMAKE_FLAGS:-} > "$CI_LOG_DIR/fuzz-configure.log" 2>&1 \
+        || ci_fail fuzz "cmake configure failed (the harness build is clang-only)" "$CI_LOG_DIR/fuzz-configure.log"
+    cmake --build "$CI_FUZZ_BUILD_DIR" -j "$CI_JOBS" > "$CI_LOG_DIR/fuzz-build.log" 2>&1 \
+        || ci_fail fuzz "the fuzz harness did not build" "$CI_LOG_DIR/fuzz-build.log"
+
+    local binary="$CI_FUZZ_BUILD_DIR/permuto_fuzz"
+    if [ ! -x "$binary" ]; then
+        ci_fail fuzz "$binary was not produced — nothing was fuzzed" "$CI_LOG_DIR/fuzz-build.log"
+    fi
+
+    # ---- the live-oracle guard ---------------------------------------------------
+    # A harness that never reaches its property is indistinguishable from one that
+    # always passes. -runs=0 executes every seed once and nothing else;
+    # PERMUTO_FUZZ_REQUIRE_IDENTITY=1 makes the binary exit non-zero when not one of
+    # them reached the round-trip assert.
+    if ! PERMUTO_FUZZ_REQUIRE_IDENTITY=1 "$binary" fuzz/seeds -runs=0 \
+        -artifact_prefix="$CI_FUZZ_CORPUS/" > "$CI_LOG_DIR/fuzz-seeds.log" 2>&1; then
+        grep -E "DEAD ORACLE|permuto fuzz:|ERROR|SUMMARY" "$CI_LOG_DIR/fuzz-seeds.log" \
+            | head -10 | sed 's/^/      /'
+        ci_fail fuzz "the seed smoke failed: fuzz/seeds could not exercise the round-trip oracle (or it found something)" "$CI_LOG_DIR/fuzz-seeds.log"
+    fi
+    local checks
+    checks=$(sed -n 's/.*identity_checks=\([0-9][0-9]*\).*/\1/p' "$CI_LOG_DIR/fuzz-seeds.log" | tail -1)
+    if [ -z "$checks" ] || [ "$checks" -eq 0 ] 2>/dev/null; then
+        ci_fail fuzz "the seed smoke reported no identity_checks — the oracle is dead and a pass would certify nothing" "$CI_LOG_DIR/fuzz-seeds.log"
+    fi
+    printf '    seed smoke: %s input(s) reached the round-trip assert\n' "$checks"
+    grep -E '^#[0-9]+[[:space:]]+(INITED|DONE)' "$CI_LOG_DIR/fuzz-seeds.log" | sed 's/^/      /'
+
+    # ---- the timed campaign ------------------------------------------------------
+    # $CI_FUZZ_CORPUS first (that is the corpus libFuzzer WRITES to and grows), then the
+    # tracked seed corpus, then fuzz/regressions — the reproducers of defects this harness
+    # actually found, which are replayed on every run so a fixed bug cannot come back
+    # unnoticed. That is the standing rule in INCIDENTS.md: the artifact becomes a test.
+    # -artifact_prefix or the reproducer lands in the CWD where nothing that reports
+    # failures will look for it.
+    if ! "$binary" "$CI_FUZZ_CORPUS" fuzz/seeds fuzz/regressions \
+        -max_total_time="$CI_FUZZ_SECONDS" \
+        -artifact_prefix="$CI_FUZZ_CORPUS/" \
+        -print_final_stats=1 > "$CI_LOG_DIR/fuzz.log" 2>&1; then
+        grep -E "ROUND-TRIP MISMATCH|permuto fuzz:|ERROR:|SUMMARY:|Test unit written to" \
+            "$CI_LOG_DIR/fuzz.log" | head -20 | sed 's/^/      /'
+        local artifact
+        artifact=$(sed -n 's/.*Test unit written to \(.*\)$/\1/p' "$CI_LOG_DIR/fuzz.log" | tail -1)
+        if [ -n "$artifact" ]; then
+            printf '    reproducer: %s\n' "$artifact"
+            printf '    replay it:  %s %s\n' "$binary" "$artifact"
+        fi
+        ci_fail fuzz "libFuzzer reported a finding — turn the reproducer above into a regression test" "$CI_LOG_DIR/fuzz.log"
+    fi
+    grep -E '^stat::|^permuto fuzz:' "$CI_LOG_DIR/fuzz.log" | sed 's/^/      /'
+    printf '    %ss campaign clean (corpus %s + fuzz/seeds + fuzz/regressions), stage took %ss\n' \
+        "$CI_FUZZ_SECONDS" "$CI_FUZZ_CORPUS" "$(( $(date +%s) - started ))"
+    ci_pass fuzz
+}
+
 stage_tidy() {
     ci_begin "tidy (clang-tidy, only NEW findings)"
     require_tool clang-tidy tidy || return 0
@@ -681,6 +856,67 @@ stage_pristine() {
         rm -rf "$tmp"
     fi
     ci_pass pristine
+}
+
+stage_package() {
+    ci_begin "package (can a consumer find_package(Permuto) and link it?)"
+    # The install tree and its CMake package files are a promise to people who are not in this
+    # repo, and until 2026-09-20 nothing checked it: PermutoConfig.cmake.in starts with
+    # @PACKAGE_INIT@ but the file was written with configure_file(), which leaves that placeholder
+    # EMPTY — so every downstream find_package(Permuto) died on "Unknown CMake command
+    # check_required_components". The library and headers installed perfectly; the package was
+    # installable and unusable (INCIDENTS.md). A two-file consumer project is the check.
+    if [ ! -f "$CI_BUILD_DIR/CMakeCache.txt" ]; then
+        ci_fail package "no configured $CI_BUILD_DIR — run the build stage first (this stage installs what it built)"
+    fi
+    # The consumer resolves nlohmann/json through PermutoConfig.cmake's find_dependency, so this
+    # needs a system copy; with none it SKIPs and says so rather than pretending.
+    if [ -z "$(sed -n 's/^nlohmann_json_DIR:PATH=//p' "$CI_BUILD_DIR/CMakeCache.txt" 2>/dev/null)" ]; then
+        ci_skip package "no system nlohmann/json in $CI_BUILD_DIR — a consumer of this install tree needs one (find_dependency)"
+        return 0
+    fi
+
+    local prefix tmp out
+    prefix=$(mktemp -d "${TMPDIR:-/tmp}/ci-package-prefix-XXXXXX")
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/ci-package-consumer-XXXXXX")
+    RUN_TMP_DIRS+=("$prefix" "$tmp")
+
+    cmake --install "$CI_BUILD_DIR" --prefix "$prefix" > "$CI_LOG_DIR/package-install.log" 2>&1 \
+        || ci_fail package "cmake --install failed on the built tree" "$CI_LOG_DIR/package-install.log"
+    printf '    installed: %s\n' "$(cd "$prefix" && find . -name '*.cmake' -path '*Permuto*' | sort | tr '\n' ' ')"
+
+    cat > "$tmp/CMakeLists.txt" <<'CONSUMER'
+cmake_minimum_required(VERSION 3.15)
+project(permuto_consumer CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Permuto REQUIRED)
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE Permuto::permuto)
+CONSUMER
+    cat > "$tmp/main.cpp" <<'CONSUMER'
+#include <permuto/permuto.hpp>
+#include <iostream>
+int main() {
+    const auto templ = nlohmann::json::parse(R"({"greeting": "${/who}"})");
+    const auto ctx = nlohmann::json::parse(R"({"who": "consumer"})");
+    std::cout << permuto::apply(templ, ctx).dump() << '\n';
+    return 0;
+}
+CONSUMER
+    cmake -S "$tmp" -B "$tmp/build" -DCMAKE_PREFIX_PATH="$prefix" \
+        > "$CI_LOG_DIR/package-configure.log" 2>&1 \
+        || ci_fail package "a consumer project cannot find_package(Permuto) from the installed tree" "$CI_LOG_DIR/package-configure.log"
+    cmake --build "$tmp/build" -j "$CI_JOBS" > "$CI_LOG_DIR/package-build.log" 2>&1 \
+        || ci_fail package "a consumer cannot compile and link against the installed tree" "$CI_LOG_DIR/package-build.log"
+    if ! out=$("$tmp/build/consumer" 2> "$CI_LOG_DIR/package-run.log"); then
+        ci_fail package "the consumer built but failed at run time" "$CI_LOG_DIR/package-run.log"
+    fi
+    if [ "$out" != '{"greeting":"consumer"}' ]; then
+        ci_fail package "the consumer ran and printed '$out', not the substitution the library promises"
+    fi
+    printf '    consumer: find_package(Permuto) -> apply() -> %s\n' "$out"
+    [ "$CI_KEEP_TMP" = "1" ] || rm -rf "$prefix" "$tmp"
+    ci_pass package
 }
 
 cleanup() {

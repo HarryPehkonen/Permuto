@@ -23,13 +23,22 @@ if [ -x "$root/tools/ci.sh" ]; then
     # the bug-finding subset (clang-diagnostic-* + clang-analyzer-*) and no style families —
     # the measurement behind that choice is in INCIDENTS.md and .ci.env.example.
     #
+    # `docs` is in it as one rule: no file in CI_DOCS_FILES quotes a test count (the suite is
+    # the tally; a number in prose drifts silently). `INCIDENTS.md` keeps its numbers — they
+    # are dated measurements, not claims about today.
+    #
+    # `fuzz` IS in it too: 10 s of libFuzzer (CI_FUZZ_SECONDS) against the library's own
+    # round-trip guarantee, plus a seed smoke that fails when no seed reaches that
+    # assert. The fast tier (.githooks/pre-commit) stays `build tests` — fuzzing on
+    # every commit is minutes nobody will pay.
+    #
     # --require-clean is the "never publish an uncommitted tree" rule. Until 2026-09-20
     # the check had to live in this hook, because the `tree` stage it belongs to could
     # not pass while the old build/ tree was committed; with build/ untracked, `tree` is
     # wired in and the rule is back where a human can also run it: `tools/ci.sh tree`.
     exec "$root/tools/ci.sh" \
         --require-clean \
-        tree format kitprobes build tests version asan tsan tidy pristine
+        tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package
 fi
 
 if [ -x "$root/scripts/gate.sh" ]; then
