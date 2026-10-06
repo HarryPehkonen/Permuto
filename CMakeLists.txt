@@ -176,6 +176,24 @@ if(PERMUTO_BUILD_EXAMPLES)
     target_link_libraries(multi_stage_example PRIVATE permuto)
 endif()
 
+# Fuzz harness
+if(PERMUTO_BUILD_FUZZING)
+    # The real thing: libFuzzer drives LLVMFuzzerTestOneInput, the library above is
+    # already instrumented by the directory-scope flags.
+    add_executable(permuto_fuzz fuzz/fuzz_permuto.cpp)
+    target_link_libraries(permuto_fuzz PRIVATE permuto)
+    target_compile_options(permuto_fuzz PRIVATE -fsanitize=fuzzer)
+    target_link_options(permuto_fuzz PRIVATE -fsanitize=fuzzer)
+else()
+    # Fuzzing OFF (the default, and what every other stage of tools/ci.sh builds):
+    # compile the harness anyway as an object library. That is what puts
+    # fuzz/fuzz_permuto.cpp into build/compile_commands.json — the `tidy` stage fails
+    # the run when a source is missing from the compile database — and what makes the
+    # `build` stage check its warnings. Nothing links it.
+    add_library(permuto_fuzz_objects OBJECT fuzz/fuzz_permuto.cpp)
+    target_link_libraries(permuto_fuzz_objects PRIVATE permuto)
+endif()
+
 # Installation
 install(TARGETS permuto permuto-cli
     EXPORT PermutoTargets
@@ -220,7 +238,7 @@ install(FILES
 )
 
 # --- CODING_STANDARDS.md: warnings as errors for Permuto's own targets ---
-foreach(permuto_target permuto permuto-cli permuto_tests)
+foreach(permuto_target permuto permuto-cli permuto_tests permuto_fuzz permuto_fuzz_objects)
     if(TARGET ${permuto_target})
         target_compile_options(${permuto_target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
