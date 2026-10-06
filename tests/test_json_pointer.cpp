@@ -31,6 +31,55 @@ TEST_F(JsonPointerTest, RootPath) {
     EXPECT_EQ(*result, test_data);
 }
 
+// RFC 6901 §3-4: "" is the whole document; "/" is ONE token — the empty string — naming
+// the member whose key is empty. They are different pointers, and parse_path() treated
+// both as the root, because it ran the pointer's tail through std::getline(), which
+// emits no final empty token: resolve("/") returned the whole document. Found by
+// fuzz/fuzz_permuto.cpp's round-trip oracle, 2026-09-20; see INCIDENTS.md.
+TEST_F(JsonPointerTest, SlashIsTheMemberWithTheEmptyKey) {
+    nlohmann::json document = {{"", 1}, {"a", 2}};
+
+    JsonPointer pointer("/");
+    EXPECT_FALSE(pointer.is_root());
+    ASSERT_EQ(pointer.tokens().size(), 1U);
+    EXPECT_EQ(pointer.tokens()[0], "");
+
+    auto result = pointer.resolve(document);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 1);
+}
+
+// The same getline bug ate a TRAILING empty token: "/a/" names member "a", then the
+// member whose key is empty inside it.
+TEST_F(JsonPointerTest, TrailingSlashNamesTheEmptyKeyMember) {
+    nlohmann::json document = {{"a", {{"", 2}, {"b", 3}}}};
+
+    JsonPointer pointer("/a/");
+    ASSERT_EQ(pointer.tokens().size(), 2U);
+    EXPECT_EQ(pointer.tokens()[0], "a");
+    EXPECT_EQ(pointer.tokens()[1], "");
+
+    auto result = pointer.resolve(document);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 2);
+}
+
+// "//" is two empty tokens, so it addresses document[""][""] — and must FAIL against a
+// document whose "" member is a scalar rather than quietly returning that scalar.
+TEST_F(JsonPointerTest, DoubleSlashIsTwoEmptyTokens) {
+    nlohmann::json nested = {{"", {{"", 9}}}};
+
+    JsonPointer pointer("//");
+    ASSERT_EQ(pointer.tokens().size(), 2U);
+
+    auto result = pointer.resolve(nested);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 9);
+
+    auto missing = pointer.resolve(nlohmann::json{{"", 1}});
+    EXPECT_FALSE(missing.has_value());
+}
+
 TEST_F(JsonPointerTest, SimpleObjectAccess) {
     JsonPointer pointer("/user/id");
     EXPECT_FALSE(pointer.is_root());

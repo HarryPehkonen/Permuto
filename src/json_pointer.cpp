@@ -1,5 +1,4 @@
 #include "json_pointer.hpp"
-#include <sstream>
 #include <stdexcept>
 
 namespace permuto {
@@ -42,7 +41,7 @@ std::optional<nlohmann::json> JsonPointer::resolve(const nlohmann::json& context
 
 void JsonPointer::parse_path(const std::string& path) {
     if (path.empty()) {
-        // Root path
+        // The empty pointer is the whole document (RFC 6901 §4).
         return;
     }
 
@@ -50,11 +49,21 @@ void JsonPointer::parse_path(const std::string& path) {
         throw std::invalid_argument("JSON Pointer must start with '/' or be empty");
     }
 
-    std::stringstream ss(path.substr(1)); // Skip leading '/'
-    std::string token;
-
-    while (std::getline(ss, token, '/')) {
-        tokens_.push_back(unescape_token(token));
+    // Split the tail on '/' BY HAND, not with std::getline: getline emits no final empty
+    // token, so "/" produced ZERO tokens (is_root() was true and resolve() answered with
+    // the whole document) and "/a/" lost the empty key it ends with. RFC 6901 makes "/"
+    // one empty token and "//" two — the empty key is a normal member name. Found by
+    // fuzz/fuzz_permuto.cpp's round-trip oracle, 2026-09-20; see INCIDENTS.md.
+    const std::string tail = path.substr(1);
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t slash = tail.find('/', start);
+        if (slash == std::string::npos) {
+            tokens_.push_back(unescape_token(tail.substr(start)));
+            return;
+        }
+        tokens_.push_back(unescape_token(tail.substr(start, slash - start)));
+        start = slash + 1;
     }
 }
 

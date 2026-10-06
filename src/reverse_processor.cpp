@@ -1,8 +1,35 @@
 #include "reverse_processor.hpp"
 #include "json_pointer.hpp"
-#include <sstream>
 
 namespace permuto {
+
+namespace {
+// RFC 6901: inside a JSON Pointer token, '~' is escaped as "~0" and '/' as "~1" — in that
+// order, in a single pass, so a key holding a literal "~1" does not come back as a '/'.
+//
+// A reverse template names each value by its path in the RESULT document, and an object
+// member's key is one token of that pointer. Composed raw, a key holding '/' turns
+// "/a/b" into a pointer that addresses members a -> b: the lookup in apply_reverse finds
+// nothing and the value is dropped from the reconstruction, silently. REQUIREMENTS.md
+// FR-3.1 makes the escaped form the only supported path syntax ("/user~1role" for keys
+// with slashes), so this is the reverse direction of a rule the repo already states.
+// Found by fuzz/fuzz_permuto.cpp's round-trip oracle, 2026-09-20; see INCIDENTS.md.
+std::string escape_pointer_token(const std::string& token) {
+    std::string escaped;
+    escaped.reserve(token.size());
+    for (const char character : token) {
+        if (character == '~') {
+            escaped += "~0";
+        } else if (character == '/') {
+            escaped += "~1";
+        } else {
+            escaped += character;
+        }
+    }
+    return escaped;
+}
+} // namespace
+
 ReverseProcessor::ReverseProcessor(const Options& options)
     : options_(options), parser_(options.start_marker, options.end_marker) {
     options_.validate();
@@ -66,7 +93,7 @@ std::vector<PathMapping> ReverseProcessor::analyze_template(const nlohmann::json
 void ReverseProcessor::analyze_object(const nlohmann::json& obj, const std::string& current_path,
                                       std::vector<PathMapping>& mappings) const {
     for (auto it = obj.begin(); it != obj.end(); ++it) {
-        std::string new_path = current_path + "/" + it.key();
+        std::string new_path = current_path + "/" + escape_pointer_token(it.key());
 
         auto sub_mappings = analyze_template(it.value(), new_path);
         mappings.insert(mappings.end(), sub_mappings.begin(), sub_mappings.end());
@@ -150,31 +177,11 @@ std::vector<std::string> ReverseProcessor::path_to_tokens(const std::string& pat
         throw std::invalid_argument("Path must start with '/'");
     }
 
-    std::vector<std::string> tokens;
-    std::stringstream ss(path.substr(1)); // Skip leading '/'
-    std::string token;
-
-    while (std::getline(ss, token, '/')) {
-        // Unescape JSON Pointer tokens
-        std::string unescaped;
-        for (size_t i = 0; i < token.size(); ++i) {
-            if (token[i] == '~' && i + 1 < token.size()) {
-                if (token[i + 1] == '0') {
-                    unescaped += '~';
-                    ++i;
-                } else if (token[i + 1] == '1') {
-                    unescaped += '/';
-                    ++i;
-                } else {
-                    unescaped += token[i];
-                }
-            } else {
-                unescaped += token[i];
-            }
-        }
-        tokens.push_back(unescaped);
-    }
-
-    return tokens;
+    // ONE tokenizer in this codebase. JsonPointer already splits a pointer and unescapes
+    // its tokens ("~1" -> '/', "~0" -> '~'), and parse_path() is where the empty-token
+    // rules live. This function used to carry a second, subtly different copy of that
+    // logic — and the copy is what silently dropped an empty-key member on the context
+    // side of a round trip (a second defect from the same harness run; see INCIDENTS.md).
+    return JsonPointer(path).tokens();
 }
 } // namespace permuto
