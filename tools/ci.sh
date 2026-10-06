@@ -18,7 +18,7 @@
 #
 # Two tiers, because a C++ full run is minutes and a commit cannot afford minutes:
 #
-#   fast  (pre-commit)  build tests
+#   fast  (pre-commit)  format build tests
 #   full  (pre-push)    --require-clean tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package
 #
 # PERMUTO ADAPTATIONS (every deviation from the kit is listed here, with the reason):
@@ -137,7 +137,21 @@ CI_DOCS_FILES=${CI_DOCS_FILES:-"README.md CLAUDE.md CODING_STANDARDS.md TECHNICA
 CI_LOG_DIR=${CI_LOG_DIR:-.ci-logs}
 CI_STRICT_TOOLS=${CI_STRICT_TOOLS:-0}           # 1 = a missing tool fails instead of SKIPping
 CI_KEEP_TMP=${CI_KEEP_TMP:-0}                   # 1 = keep the pristine temp dir for inspection
-CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-"tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package"}
+# The two hook tiers, ONE definition each. Both hooks NAME a tier instead of repeating a list, so a
+# stage added below cannot be run by a hand run and skipped by a push (or the reverse) — the failure
+# this repo's own incident log records elsewhere in the fleet, where a push ran eleven stages of
+# twelve and still printed GATE PASSED. The lines below are what probes/hook-tiers-agree.sh compares
+# the two variables against, and against the tier the hooks name.
+#
+#
+# `format` is in the fast tier deliberately: it is the one check that says "the file you are about to
+# commit is not the file clang-format would write", it costs well under a second on a warm tree, and
+# its absence from a fast tier is how an unformatted commit reached FSMTable's main branch on
+# 2026-10-06. `full` IS the default list, so a hand run and a push run the same stages and only
+# --require-clean differs.
+CI_FAST_STAGES=${CI_FAST_STAGES:-"format build tests"}
+CI_FULL_STAGES=${CI_FULL_STAGES:-"tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package"}
+CI_DEFAULT_STAGES=${CI_DEFAULT_STAGES:-$CI_FULL_STAGES}
 CI_TIDY_BASELINE=${CI_TIDY_BASELINE:-.ci/tidy-baseline.txt}
 CI_BUILD_TYPE=${CI_BUILD_TYPE:-Debug}
 # The source set the format and tidy stages own. Extend for your layout.
@@ -988,6 +1002,8 @@ while [ $# -gt 0 ]; do
         --strict-tools) CI_STRICT_TOOLS=1 ;;
         --write-tidy-baseline) WRITE_TIDY_BASELINE=1 ;;
         -*) printf 'unknown option: %s (try --help)\n' "$1" >&2; exit 2 ;;
+        fast) STAGES_REQUESTED+=($CI_FAST_STAGES) ;;
+        full) STAGES_REQUESTED+=($CI_FULL_STAGES) ;;
         *) STAGES_REQUESTED+=("$1") ;;
     esac
     shift

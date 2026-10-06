@@ -36,9 +36,7 @@ if [ -x "$root/tools/ci.sh" ]; then
     # the check had to live in this hook, because the `tree` stage it belongs to could
     # not pass while the old build/ tree was committed; with build/ untracked, `tree` is
     # wired in and the rule is back where a human can also run it: `tools/ci.sh tree`.
-    exec "$root/tools/ci.sh" \
-        --require-clean \
-        tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package
+    exec "$root/tools/ci.sh" --require-clean full
 fi
 
 if [ -x "$root/scripts/gate.sh" ]; then

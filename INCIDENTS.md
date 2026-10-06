@@ -14,6 +14,30 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-06 — the pre-push hook carried its own copy of the stage list
+
+What broke:        `.githooks/pre-push` named all thirteen stages, and so did `CI_DEFAULT_STAGES` in
+                   tools/ci.sh. They agreed here; the drift showed in the siblings, which is why it
+                   is worth an entry. Computo's default list had fallen two stages behind its hook
+                   (`docs`, `release`), so a hand run and a push ran different gates. FSMTable's
+                   pre-push still named the kit's original eleven while its gate defined thirteen, so
+                   every push skipped the fuzzer — the stage that repo's own spec requires. A hook
+                   that repeats a list is a copy nothing compares.
+Check added:       tools/ci.sh declares CI_FAST_STAGES and CI_FULL_STAGES, and both hooks NAME a tier
+                   (`tools/ci.sh fast`, `tools/ci.sh --require-clean full`) instead of repeating one.
+                   CI_DEFAULT_STAGES IS the full tier, so a hand run and a push run the same thirteen
+                   stages and only --require-clean differs. The `kitprobes` stage runs
+                   tools/kit-probes/hook-tiers-agree.sh, which fails when a hook names a stage, when a
+                   stage the gate defines is in no tier, when the fast tier is not a subset of the
+                   full one, or when the lists printed in the header stop matching the variables.
+                   `format` joins the fast tier: it is the check that would have caught the
+                   unformatted commit FSMTable pushed on the same day.
+Why it must stay:  Put the list back in the hook and the next stage added to the gate is run by a
+                   hand run and skipped by every push — silently, with GATE PASSED printed about a
+                   stage set the push did not run.
+
+---
+
 ## 2026-09-20 — the fuzz stage certified a round trip it could not reach
 
 What broke:        The `fuzz` stage was green and its oracle was live — the seed smoke proved that

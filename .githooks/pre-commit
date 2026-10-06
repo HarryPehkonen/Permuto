@@ -19,7 +19,9 @@ root=$(git rev-parse --show-toplevel) || exit 1
 # C++: a full run is minutes, so commit gets only build + tests. Everything else
 # (format, sanitizers, tidy, clean-checkout) belongs to pre-push.
 if [ -x "$root/tools/ci.sh" ]; then
-    exec "$root/tools/ci.sh" build tests
+    # 2026-10-06: names a tier. The list lives in tools/ci.sh (CI_FAST_STAGES) so a stage added
+    # there reaches a commit without this file being edited. See INCIDENTS.md.
+    exec "$root/tools/ci.sh" fast
 fi
 
 # Deno / Python: the whole gate is already seconds. Run all of it here so a broken
