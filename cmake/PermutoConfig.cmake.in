@@ -1,6 +1,12 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
+# EVERY dependency in permuto's exported link interface needs its find_dependency here, or a
+# consumer's configure fails with "the target was not found" — the package config is the only
+# place those imported targets get established on the consumer side. Threads was missing until
+# 2026-09-20 (the library uses thread_local state, so it links Threads::Threads); found by the
+# `package` stage, which builds a consumer against the installed tree. See INCIDENTS.md.
+find_dependency(Threads)
 find_dependency(nlohmann_json 3.2.0)
 
 include("${CMAKE_CURRENT_LIST_DIR}/PermutoTargets.cmake")
