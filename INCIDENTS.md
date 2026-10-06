@@ -14,6 +14,236 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-09-20 — the fuzz stage certified a round trip it could not reach
+
+What broke:        The `fuzz` stage was green and its oracle was live — the seed smoke proved that
+                   inputs reached the assert — and it could not reach the surface it existed to
+                   defend. An independent adversarial verification
+                   (`/tmp/permuto-verification.md`) sabotaged `apply_reverse()` to skip every
+                   mapping whose context path contains a digit. That sabotage **survived 4.2
+                   million executions** (`identity_checks=59709`, all matching, exit 0).
+                   Instrumenting the harness showed why: condition C3 requires the context's
+                   leaf-path set to EQUAL the template's placeholder-path set, and both documents
+                   arrive through one byte stream, so a mutation on one side breaks the equality
+                   and the input is skipped — only VALUE mutations survived. 117 of 9,952 corpus
+                   inputs ever reached the assertion, and in all 117 the context's key names were
+                   byte-identical to the seeds'. The hand-written input `{"x":"${/a1}"}` +
+                   `{"a1":1}` finds the same sabotage instantly, so the stage was certifying a
+                   surface its input could not touch.
+Check added:       a SECOND interpretation of every input (`fuzz/fuzz_permuto.cpp`): the same
+                   bytes are read again as a template plus a value pool, the harness collects the
+                   paths the template references and BUILDS the context that provides exactly
+                   those paths — so the two documents agree by construction and key names, key
+                   count and nesting shape mutate freely (RFC 6901 tokens are unescaped while
+                   building, so keys holding `/` or `~` are reachable as well). Each reading has
+                   its own counter pair and the seed smoke now requires BOTH to be non-zero.
+                   Measured after: a 60 s campaign reaches the assertion 27,201 times from the
+                   structured reading against 2,040 from the original one, at 11,728 exec/s (was
+                   ~19,100 — two parses per input, the honest price). The verifier's four
+                   sabotages all die inside the 10 s budget, S1 instantly and from the tracked
+                   seeds alone, with a control run of the untouched tree clean. The verifier also
+                   found that reverting the empty-token fix left every reproducer clean, so
+                   `fuzz/regressions/empty-key-context-side` exists for it now.
+Why it must stay:  The same shape as the gate that printed `GATE PASSED` with nine of its ten
+                   stages never run: a check whose input space cannot reach the property is
+                   indistinguishable from outside from one that can. Deleting the second
+                   interpretation re-narrows the oracle SILENTLY, because the first one keeps the
+                   counters healthy — which is why the smoke requires both.
+
+## 2026-09-20 — the install tree was never consumable, and nothing checked it
+
+What broke:        `find_package(Permuto)` failed for every downstream project, in two layers,
+                   both found the first time the install tree was put in front of a real consumer:
+                   (1) `PermutoConfig.cmake` was produced by `configure_file()`, which leaves the
+                   `@PACKAGE_INIT@` placeholder EMPTY — and that placeholder is what defines
+                   `check_required_components()` — so a consumer's configure died on
+                   `Unknown CMake command "check_required_components"`. (2) With that fixed it
+                   died in `PermutoTargets.cmake`: "The link interface of target
+                   Permuto::permuto contains Threads::Threads but the target was not found",
+                   because `PermutoConfig.cmake.in` declared `find_dependency(nlohmann_json)` and
+                   not `find_dependency(Threads)` — every imported target in an exported
+                   interface must be re-established on the consumer side, and this library links
+                   Threads for its thread_local state. The library, the headers and the target
+                   files all installed perfectly, which is why this looked complete: installable,
+                   and unusable.
+Check added:       `configure_package_config_file()` in place of `configure_file()`,
+                   `find_dependency(Threads)`, and the `package` stage in `tools/ci.sh`, which
+                   installs the built tree into a temp prefix and then writes, configures, builds
+                   and RUNS a two-file consumer project (`find_package(Permuto)` plus a program
+                   that calls `permuto::apply()` through the installed headers), requiring the
+                   exact substitution it prints. Verified end to end: `find_package(Permuto) ->
+                   apply() -> {"greeting":"consumer"}`, stage cost 3 s. On a machine without a
+                   system nlohmann/json the stage SKIPs and says why, because the consumer
+                   resolves that dependency through `find_dependency`.
+Why it must stay:  A package is a promise to people who are not in this repo, and this is the one
+                   class of failure a repo cannot see from the inside: every stage here builds
+                   against the SOURCE tree, where nothing is imported and nothing can be missing.
+                   It was found by accident — checking the exported interface after adding the
+                   nlohmann fetch fallback — and the stage is what makes it found by the gate
+                   instead. See also the entry above: same shape, an assumption with no check.
+
+## 2026-09-20 — a fresh clone could not configure, because nlohmann was assumed to be installed
+
+What broke:        `cmake -B build` on a fresh clone died inside
+                   `find_package(nlohmann_json 3.2.0 REQUIRED)` on the Nobara laptop: no
+                   `/usr/include/nlohmann`, and the package that provides it there is called
+                   `json-devel`, which nobody guesses. Nothing was wrong with the code — the build
+                   assumed a system dependency that only the machine it was developed on happened
+                   to have (`nlohmann-json3-dev`), so "it builds" was a property of the developer's
+                   box, not of the repo. (The `git pull` before the attempt changed nothing: this
+                   work was still uncommitted, so that clone was unchanged.)
+Check added:       `CMakeLists.txt` finds the package QUIETly and, when there is none, supplies
+                   the headers itself: it fetches nlohmann's LATEST RELEASE from GitHub
+                   (`releases/latest/download/json.tar.xz`, unpinned by Harri's call — a mature
+                   library, and pinning would only mean re-deciding later), with
+                   `-DPERMUTO_NLOHMANN_DIR` for a machine that must stay offline. Both fallbacks
+                   register the headers as an IMPORTED interface target under the same name
+                   `find_package()` creates, and that detail is load-bearing: adding the
+                   dependency as a subproject breaks `install(EXPORT PermutoTargets)` at generate
+                   time ("requires target nlohmann_json that is not in any export set" — measured
+                   on this change's first attempt, which is why the fix is an imported target and
+                   not `add_subdirectory`). Verified: system-package path (no fetch, tests pass,
+                   install works), forced-fetch path (fetched, built, tested, installed), the
+                   `PERMUTO_NLOHMANN_DIR` path offline, and a downstream `find_package(Permuto)`
+                   consumer built against the fetched install tree.
+Why it must stay:  An assumption with no check, in the same shape as every other entry here: it
+                   was invisible on the machine where the code was written and fatal on a clean
+                   one. Note honestly that NO gate stage exercises the fetch path — this machine
+                   has the package, `find_package()` wins, and the gate stays offline. The
+                   intended exercise is a from-scratch build on a machine that lacks it (the Pi
+                   has no nlohmann): clone, configure, build, test, with no local install.
+
+## 2026-09-20 — the docs described a project that did not exist, and nothing read them
+
+What broke:        `CLAUDE.md`'s Project Overview still said the project was "in the
+                   **design/planning phase** with comprehensive documentation but no
+                   implementation yet", and its status line advertised a test count, months after
+                   the library, CLI, examples, tests and gate all existed. The same figure sat in
+                   README's badge and Testing section, and the file carried a seven-phase
+                   "Implementation Plan" whose every phase was still "pending". All of it was
+                   false and every stage was green, because no stage has ever read a document:
+                   a stale count is a claim with no check behind it, while the suite is one
+                   `ctest -N` away from the truth.
+Check added:       the `docs` stage in `tools/ci.sh` — no file in `CI_DOCS_FILES` (README.md,
+                   CLAUDE.md, CODING_STANDARDS.md, TECHNICAL_DETAILS.md, REQUIREMENTS.md) may
+                   quote a test count, in the badge form (`tests-64%2F64`), the prose form
+                   ("64 tests", "64 unit tests", "64 TESTS"), the label form ("Total Tests: 64")
+                   or the parenthetical form ("tests (64)"). The first version of that pattern
+                   was porous — an independent verification walked "Total Tests: 66" and
+                   "58 unit tests" straight past it, and the pattern now covers all eight
+                   shapes it tried. `INCIDENTS.md` is deliberately EXEMPT: its numbers are dated
+                   measurements of past events, and keeping them in step with today's suite
+                   would mean requiring them to be wrong. The count-quoting rule is Harri's
+                   call, 2026-09-20: "don't quote counts" — describe what the tests cover
+                   instead. This entry's own prose obeys it.
+Why it must stay:  A stale doc is worse than a missing one, because it is read as current.
+                   Note the limit honestly: this stage checks COUNTS, not whether prose is
+                   true. The Project Overview was corrected by hand, and only review keeps it
+                   true — the stage exists to stop the one shape of drift that is measurable.
+
+## 2026-09-20 — a template key holding `/` or `~` silently vanished from the round trip
+
+What broke:        The library's headline guarantee — `apply()`, then `create_reverse_template()`,
+                   then `apply_reverse()` reproduces the context — failed quietly for any template
+                   whose member key holds `/` or `~`. `analyze_object()` composed the result
+                   pointer as `current_path + "/" + key`, with no RFC 6901 escaping, so the reverse
+                   template for `{"a/b": "${/x}"}` was `{"/a/b": "/x"}`: `apply_reverse()` looked up
+                   `/a/b` in `{"a/b": 1}`, which reads as member `a` then member `b`, found nothing,
+                   and emitted `{}`. No exception, no warning, no visibly wrong output — the value
+                   was simply gone. `REQUIREMENTS.md` FR-3.1 already required the escaped form
+                   ("/user~1role" for keys with slashes) on the input side of the same rule, so the
+                   library was violating its own documented path syntax when it produced one.
+                   Found by the fuzzer's round-trip oracle ten seconds into its first campaign, on
+                   an input mutated from this repo's own README example. Six independent
+                   reproducers are kept in `fuzz/regressions/`.
+Check added:       `escape_pointer_token()` in `src/reverse_processor.cpp` (one pass, `~` -> `~0`
+                   then `/` -> `~1`, so a literal `~1` in a key cannot come back as a slash), used
+                   by `analyze_object()`; three tests written RED first —
+                   `ResultPathEscapesSlashInKey`, `ResultPathEscapesTildeInKey`,
+                   `ResultPathEscapesNestedKeyHoldingBoth` (`tests/test_reverse_processor.cpp`).
+                   Behind them, the `fuzz` stage: the reproducers are replayed by every run, and
+                   the seed smoke fails the gate when no input reaches the assertion, so the oracle
+                   cannot rot into decoration.
+Why it must stay:  Every other stage was green on this tree, and every input any of them ever fed
+                   this library was written by a human who already believed it would work. This is
+                   the class of defect a suite can only catch once somebody thinks of the case: a
+                   silently wrong answer in the one feature the project is named after, not a crash.
+
+## 2026-09-20 — `/` addressed the whole document, so an empty-key member never came back
+
+What broke:        Two sites, one cause. `JsonPointer::parse_path()` split a pointer's tail with
+                   `std::getline()`, which emits no final empty token, so the pointer `/` produced
+                   ZERO tokens: `is_root()` was true and `resolve("/")` answered with the whole
+                   document instead of the member whose key is empty. The same bug ate every
+                   trailing empty token. Measured before the fix, against `{"":1,"a":{"":2}}`:
+                   `""` -> root (correct), `/` -> 0 tokens -> the whole document (wrong, RFC 6901
+                   says one empty token), `/a/` -> 1 token -> `{"":2}` (wrong, that pointer names
+                   the empty key inside `a`), `//` -> 1 token (wrong, two empty tokens).
+                   `ReverseProcessor::path_to_tokens()` carried a second, hand-copied tokenizer with
+                   the same bug, so on the write side `set_at_path(context, "/", value)` looped over
+                   no tokens and stored nothing: another silent drop. Both were reached by the
+                   harness, the second inside the same reproducer as the key-escaping defect above.
+Check added:       `parse_path()` splits on `/` by hand, preserving empty tokens; and
+                   `path_to_tokens()` no longer implements a tokenizer at all — it returns
+                   `JsonPointer(path).tokens()`, so this codebase has ONE pointer tokenizer instead
+                   of two that can drift apart. Five tests written RED first:
+                   `SlashIsTheMemberWithTheEmptyKey`, `TrailingSlashNamesTheEmptyKeyMember`,
+                   `DoubleSlashIsTwoEmptyTokens` (`tests/test_json_pointer.cpp`) and
+                   `RoundTripEmptyTemplateKey`, `RoundTripEmptyContextKey`
+                   (`tests/test_reverse_processor.cpp`).
+Why it must stay:  RFC 6901 defines `""` as the whole document and `"/"` as one token, and the
+                   difference is invisible until a document actually has an empty key. The
+                   duplicate tokenizer is the structural half of the lesson: the two copies had
+                   already drifted, and the drift was only observable through a round trip.
+
+## 2026-09-20 — ten gate stages, and not one of them ran the library against hostile input
+
+What broke:        Nothing visible — which is the point. The gate certified ten stages
+                   (`tree format kitprobes build tests version asan tsan tidy pristine`) and
+                   printed `GATE PASSED`, and every input any of them ever fed this library
+                   was written by a human who already believed it would work: the 58 tests,
+                   the three examples, `example_template.json`. `asan` and `tsan` are
+                   sanitizers, not input sources — they can only find a bug in an input
+                   somebody already thought to write down. The adaptation notes at the top of
+                   `tools/ci.sh` said so in one line, `* no fuzz stage: the repo has no fuzz
+                   target yet`, and that line had been true long enough to read as a decision
+                   rather than a hole. It was a hole. The first ten seconds of the harness
+                   that filled it produced a reproducer, from a mutation of this repo's own
+                   README example: `create_reverse_template()` builds the result pointer for
+                   an object member as `current_path + "/" + key` without JSON-Pointer
+                   escaping (`src/reverse_processor.cpp`, `analyze_object`), so a template key
+                   holding `/` or `~` produces a reverse template that addresses nothing —
+                   template `{"a/b":"${/x}"}` with context `{"x":1}` reverses to
+                   `{"/a/b":"/x"}`, which resolves nowhere in `{"a/b":1}`, and the round trip
+                   silently returns `{}`. That is the documented round-trip guarantee
+                   (README.md "Reverse Operations", REQUIREMENTS.md) failing quietly, on a
+                   tree where every other stage is green.
+Check added:       `fuzz/fuzz_permuto.cpp` (a libFuzzer harness whose oracle IS the round-trip
+                   guarantee: `apply` -> `create_reverse_template` -> `apply_reverse` must
+                   reproduce the context, asserted only under the conditions the guarantee is
+                   claimed for, which the harness header spells out one by one) + the `fuzz`
+                   stage in `tools/ci.sh`, in `CI_DEFAULT_STAGES` and in `.githooks/pre-push`,
+                   between `tsan` and `tidy`. The stage runs the binary twice. The second run
+                   is the timed campaign (`CI_FUZZ_SECONDS`, default 10 s, against the corpus
+                   in `fuzz/corpus/` plus the tracked seeds in `fuzz/seeds/`). The FIRST run
+                   is the check this entry is really about: `-runs=0` over `fuzz/seeds` with
+                   `PERMUTO_FUZZ_REQUIRE_IDENTITY=1`, which makes the harness exit non-zero
+                   when not one input reached the round-trip assert, and the stage then prints
+                   the number that did.
+Why it must stay:  A fuzz target that never reaches its property is indistinguishable, from
+                   the outside, from one that always passes: same exit status, same green
+                   stage, same `GATE PASSED`. That is the identical shape as the failure two
+                   entries down (nine stages that never ran, reported as ten that passed) and
+                   as the tidy baseline that could never match — a check whose output is
+                   "fine" whether or not it did anything. Deleting the seed smoke, or letting
+                   the seeds drift until the four conditions stop holding for all of them,
+                   converts this stage back into decoration while leaving the summary line
+                   unchanged. The budget is deliberately small (10 s on every push, the
+                   rationale is in `.ci.env.example` and the adaptation notes) because an
+                   always-red or always-slow stage gets `--no-verify`, which is the same hole
+                   again with a different cause.
+
+
 ## 2026-09-20 — the gate printed GATE PASSED with 9 of its 10 stages never run
 
 What broke:        A `git push` re-ran the full tier and printed `all 10 stage(s) passed in 0s`

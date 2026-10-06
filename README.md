@@ -1,6 +1,6 @@
 # Permuto
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.) [![Tests](https://img.shields.io/badge/tests-65%2F65-brightgreen.svg)](.) 
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](.) [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](.) 
 
 Permuto is a lightweight C++ library for JSON template processing that enables declarative transformation of data by substituting variables from a context object into JSON templates.
 
@@ -271,9 +271,24 @@ auto reverse_template = permuto::create_reverse_template(template_json);
 // Reconstruct original context
 auto reconstructed = permuto::apply_reverse(reverse_template, result);
 
-// Perfect round-trip: context == reconstructed
+// Round-trip guarantee: context == reconstructed, under the conditions the guarantee is
+// claimed for — interpolation disabled, MissingKeyBehavior::Ignore, every placeholder
+// resolving to a path the context provides, and no placeholder inside a context value.
 assert(context == reconstructed);
 ```
+
+### Round-trip limits
+
+- A reference that indexes **into** a non-empty array (`${/items/0}`) does not reconstruct:
+  a reverse template names each value by its JSON Pointer in the result and records no
+  container kinds, so `apply_reverse()` rebuilds objects only — `{"items":[1,2]}` comes back
+  as `{"items":{"0":1,"1":2}}`. A reference to the array **as a whole** (`${/items}`) does
+  reconstruct. Fixing the first case means the reverse-template format has to carry container
+  kinds; until then the harness that proves the guarantee excludes exactly this case and
+  nothing else (`fuzz/fuzz_permuto.cpp`, the conditions are enumerated in its header).
+- Keys holding `/` or `~` are escaped in a reverse template as RFC 6901 requires
+  (`{"a/b": ...}` becomes the pointer `/a~1b`), so the map it produces addresses the right
+  members. `INCIDENTS.md` records what happened before that escaping existed.
 
 ## Command Line Tool
 
@@ -336,13 +351,31 @@ cmake --install build
 ### Build Options
 
 - `PERMUTO_BUILD_TESTS` - Build test suite (default: ON)
+- `PERMUTO_BUILD_EXAMPLES` - Build the example programs (default: ON)
+- `PERMUTO_BUILD_FUZZING` - Build the libFuzzer harness (default: OFF; clang only)
+- `PERMUTO_NLOHMANN_DIR` - Directory holding `nlohmann/json.hpp`, used only when no system
+  nlohmann/json is found (see below)
 - `CMAKE_BUILD_TYPE` - Build type (Debug, Release, RelWithDebInfo)
+
+### The JSON dependency
+
+`nlohmann/json` is the JSON type in this library's **public API** — every function takes and
+returns it — so it is deliberately the de-facto standard type rather than anything project-local:
+consumers program against a type they already know, and nothing else has to be adopted to use
+Permuto. (JSOM, this suite's own JSON library, is deliberately *not* the boundary type here.)
+
+CMake uses the copy the machine already has, and when it finds none it fetches nlohmann's
+**latest release** from GitHub — no version is pinned, on purpose. A build directory keeps the
+copy it first fetched, so a fresh configure is what picks up a newer release. On a machine that
+must stay offline, either install the distro package (Debian/Ubuntu: `nlohmann-json3-dev`;
+Fedora/Nobara: `json-devel`) or point CMake at a local copy:
+`cmake -B build -DPERMUTO_NLOHMANN_DIR=/path/to/nlohmann-json`.
 
 ## Testing
 
 The library includes comprehensive testing:
 
-- **65 total tests** covering all functionality
+- **Unit, integration and thread-safety tests** covering all functionality
 - **Thread safety tests** with concurrent scenarios:
   - Concurrent API calls (1000+ operations)
   - Different templates per thread

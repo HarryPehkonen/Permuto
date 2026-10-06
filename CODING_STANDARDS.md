@@ -71,11 +71,36 @@ tier: `build tests`) and `.githooks/pre-push` (full tier) run. Run it by hand at
   own targets (`permuto`, `permuto-cli`, `permuto_tests`), and the `build` stage also
   counts `warning:` lines in its log, so a target that never got `-Werror` cannot slip
   through. Zero warnings is the verified baseline.
-- **Tests:** `ctest --test-dir build` (PERMUTO_BUILD_TESTS, default ON) — 58 tests.
+- **Tests:** `ctest --test-dir build` (PERMUTO_BUILD_TESTS, default ON). The suite is the
+  only tally of how many there are — no doc in this repo quotes a number, and the `docs`
+  stage fails the run if one starts to.
 - **Sanitizers:** the `asan` (ASan+UBSan) and `tsan` (ThreadSanitizer) stages build in
   `build-asan/` and `build-tsan/` and run the same suite. By hand:
   `cmake -B build-asan -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined
   -fno-omit-frame-pointer" && cmake --build build-asan && ctest --test-dir build-asan`.
+- **Fuzzing:** the harness reads every input TWICE — as two documents, and as a template plus a
+  value pool from which it BUILDS the context, so key names and document shape mutate freely
+  (the first reading alone could not reach that surface; `INCIDENTS.md`, 2026-09-20). The `fuzz`
+  stage builds `fuzz/fuzz_permuto.cpp` with clang in `build-fuzz/`
+  (`PERMUTO_BUILD_FUZZING=ON`, the library instrumented as well as the harness) and runs it
+  twice: a `-runs=0` seed smoke that FAILS when no seed reaches the round-trip assertion, then
+  `CI_FUZZ_SECONDS` (default 10 s) against `fuzz/corpus/` plus the tracked `fuzz/seeds/`. A
+  finding fails the stage and prints its reproducer, which becomes a regression test. The
+  option is OFF by default because libFuzzer is clang-only; the harness is compiled either way
+  as an object library, so `build`, `format` and `tidy` see it. Two real defects were found by
+  its first campaign — `INCIDENTS.md` has both.
+- **Docs:** the `docs` stage — no file listed in `CI_DOCS_FILES` quotes a test count. A number
+  in prose drifts silently: this repo advertised a figure that had been wrong for months, and a
+  Project Overview that described a design phase which had already ended, with every stage green
+  throughout, because no stage had ever read a document. The suite is the only tally.
+  `INCIDENTS.md` is exempt on purpose: its numbers are dated measurements of past events, which
+  must NOT drift with the suite.
+- **Package:** the `package` stage installs the built tree into a temporary prefix and builds a
+  two-file consumer against it (`find_package(Permuto)` → `permuto::apply()` through the installed
+  headers), so the CMake package files are checked rather than assumed — both layers of the
+  2026-09-20 consumer breakage are caught by it (`INCIDENTS.md`). It needs a system
+  nlohmann/json, because the consumer resolves that dependency through `find_dependency`; with
+  none it SKIPs and says so.
 - **Tree:** the `tree` stage — every file is either committed or ignored, the gate's own
   footprint (`build/`, `build-*/`, `.ci-logs/`, `.ci.env`) is ignored, and with
   `--require-clean` no tracked file has uncommitted edits. Build output is never
