@@ -97,7 +97,7 @@
 // always passes. The atexit handler prints
 //     permuto fuzz: inputs=<n> identity_checks=<n> identity_matches=<n>
 // and, when PERMUTO_FUZZ_REQUIRE_IDENTITY=1, exits non-zero if identity_checks is
-// zero. The `fuzz` stage of tools/ci.sh sets that variable for a -runs=0 pass over
+// zero. The `fuzz` stage (scripts/fuzz.sh) sets that variable for a -runs=0 pass over
 // fuzz/seeds, so a corpus that cannot reach the round-trip assert fails the gate
 // instead of passing silently.
 //

@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # --- Version header (the artifact-identity invariant) ---
 # project(Permuto VERSION ...) on line 2 is the ONE place the version is written. This
-# generates the second copy the CLI compiles against; tools/ci.sh's `version` stage fails
+# generates the second copy the CLI compiles against; the gate's `version` stage fails
 # when the two disagree, and when `permuto --version` reports something else.
 configure_file(cmake/version.hpp.in "${CMAKE_BINARY_DIR}/generated/version.hpp" @ONLY)
 
@@ -91,7 +91,7 @@ if(PERMUTO_BUILD_FUZZING)
             "PERMUTO_BUILD_FUZZING=ON needs clang: libFuzzer ships with clang as "
             "-fsanitize=fuzzer and has no GCC equivalent. This compiler is "
             "'${CMAKE_CXX_COMPILER_ID}'. Reconfigure a separate build dir with "
-            "-DCMAKE_CXX_COMPILER=clang++ (tools/ci.sh's fuzz stage does exactly that).")
+            "-DCMAKE_CXX_COMPILER=clang++ (the fuzz stage, scripts/fuzz.sh, does exactly that).")
     endif()
     add_compile_options(-fsanitize=fuzzer-no-link,address,undefined
                         -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g -O1)
@@ -185,7 +185,7 @@ if(PERMUTO_BUILD_FUZZING)
     target_compile_options(permuto_fuzz PRIVATE -fsanitize=fuzzer)
     target_link_options(permuto_fuzz PRIVATE -fsanitize=fuzzer)
 else()
-    # Fuzzing OFF (the default, and what every other stage of tools/ci.sh builds):
+    # Fuzzing OFF (the default, and what every other stage of the gate builds):
     # compile the harness anyway as an object library. That is what puts
     # fuzz/fuzz_permuto.cpp into build/compile_commands.json — the `tidy` stage fails
     # the run when a source is missing from the compile database — and what makes the

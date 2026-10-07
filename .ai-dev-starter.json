@@ -4,121 +4,77 @@
   "revision": "98e517d3655919c44d0a8df936b16c430281acfe",
   "recorded_at": "2026-10-06",
   "record_kind": "retroactive",
-  "record_note": "Gate wired by hand on 2026-09-19 (commit 66a5f04, 'plunk in the two-tier gate'), before the kit existed as a git repo, so `revision` is the kit's FIRST PUBLISHED commit and not the exact copy point; the kit's later tidy-baseline fix (t_561f6857) was ported into tools/ci.sh by hand at cbb7248 on 2026-09-20, so this repo already carries the kit's current C++ gate. Every copied artifact is deliberately adapted to Permuto (reasons in the files themselves and in INCIDENTS.md) except .githooks/pre-commit, which is byte-identical. The tidy stage was declined at wiring time and WIRED on 2026-09-20 (b740942) against this repo's own .clang-tidy, so \"this repo does not run tidy\" is no longer true and must not be restored by a sync. NOT a kit copy, and therefore not listed here \u2014 do not let a sync install the template over it: CLAUDE.md is this repo's own contract, last edited 2026-09-08 (6ef5375), i.e. before the kit existed; the kit's templates/CLAUDE.md.template is a placeholder shaped like contracts such as this one. The kit's C++ gate is the only kit artifact this repo uses; the Deno and Python artifacts never applied here. LICENSE is byte-identical to the kit's, but it is not listed: this repo's copy dates to its Initial commit (422bba8, 2025-03-28) and both files are the canonical Unlicense text \u2014 the kit took LICENSE from repos like this one, so there is nothing to sync in either direction. Rule that keeps this file true: any commit that edits a copied artifact must update that artifact's repo_sha256 in the same commit. **2026-09-20, card t_0cc793fb:** the `kitprobes` stage and `tools/kit-probes/tidy-baseline.sh` were taken from the kit at the revision above \u2014 a fix that must propagate ships a probe, and this copy now runs it in its own gate. `revision` moved to that commit because these entries come from it; the earlier entries are still the fb387f2 wiring, and the kit files behind them have not changed between the two commits (the ones that did \u2014 `templates/cpp/ci.sh`, `templates/hooks/pre-push` \u2014 were ported in this same commit). **2026-09-20, later the same day (still card t_0cc793fb):** `revision` moved to 951608c2675a\u2026 for two more artifacts from the kit \u2014 the gate's dispatch guards (a stage that dies or returns non-zero without a verdict can no longer leave a green run; measured on this gate's own `local -a sources`, see INCIDENTS.md) and that fix's own probe `tools/kit-probes/gate-stage-guards.sh`. Between the previous revision and this one the kit changed only `templates/cpp/ci.sh`, `INCIDENTS.md`, `DESIGN-NOTES.md` and the new probe; the entries behind the other files are unchanged by it. **2026-09-20, card t_fb62d8fa:** the record gained the kit's per-fix lists (docs/KIT-REVISION-CONVENTION.md, 'Exact file shape'), so what this copy has and has not taken from the kit is machine-readable instead of prose. `adopted_fixes` names the two probes this copy carries, with the kit revision each fix came from -- and that claim is now CHECKED, not just asserted: the record checker runs each probe against tools/ci.sh, and a claim whose probe is absent or fails is a record failure. `declined_fixes` records the kit's `optimized-build-stage` (probe `probes/optimized-stage.sh`, added by the kit at d531a110) as NOT TAKEN: run against this gate it FAILS (measured 0 ok, 7 failed at this HEAD), and whether this fork takes that stage is parked with Harri. Saying so in the record is the point -- the alternative, moving `revision` to d531a110, would claim this copy was wired from artifacts it never took. **`revision` and every `kit_sha256` are UNCHANGED by this commit**: nothing here came from the kit, and being behind the kit is not a failure -- the check that called it one was measuring whether the kit had moved. **2026-09-20, card t_0a9a0018:** the kit's GIT_INDEX_FILE fix was ported \u2014 kit f9c3300 \u2014 as one line in tools/ci.sh's prologue plus the kit's own probe at tools/kit-probes/git-index-file.sh, and `revision` moved to f9c3300 because this files[] set now takes that probe from it. Nothing else this copy carries changed between the two revisions, so every other entry's `kit_sha256` is untouched; the one that did move is tools/ci.sh's, because the kit's templates/cpp/ci.sh is where the fix landed. Permuto's exposure is stated honestly in the gate's own comment rather than implied: its CMakeLists.txt uses find_package(GTest) and no FetchContent, so no stage of it runs git outside this checkout TODAY. The line is here because the class is general and this copy already contains an instance of it \u2014 tools/kit-probes/ runs git in throwaway repos by design (that is how the kit's probes work). `adopted_fixes` claims the fix and the record checker RUNS the probe against this repo's gate. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 4 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited 8541d27 2026-09-20 gate: unset GIT_INDEX_FILE in the prologue, and carry the kit's probe for it); .githooks/pre-push (last edited ecf1429 2026-09-20 probes: carry the kit's tidy-baseline probe and run it in this gate (kitprobes)); .ci.env.example (last edited ecf1429 2026-09-20 probes: carry the kit's tidy-baseline probe and run it in this gate (kitprobes)); INCIDENTS.md (last edited 1fdc28c 2026-09-20 gate: the verdict comes from the stages that RAN \u2014 the guard, and its probe). **2026-10-06, second correction:** the re-hash earlier today was taken from the WORKING TREE, which that day carried an uncommitted hardening pass \u2014 fuzz harness, two pointer fixes, three gate stages, the doc rewrite. That work is now committed (92f1180, 2548578, the fuzz and gate commits, and the docs commit after them) and these five artifacts are re-read from the COMMITTED content, so this record verifies on a fresh clone rather than only in this checkout: . **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, the kit commit that probe is carried from verbatim; per the convention every kit_sha256 here is re-read at that copy point, not just the new file's. tools/ci.sh gained CI_FAST_STAGES/CI_FULL_STAGES and the `fast`/`full` arguments, .githooks/pre-commit and .githooks/pre-push now name a tier instead of repeating a list, and INCIDENTS.md records why. The hashes recorded earlier today were taken from the working tree; the hardening pass they belonged to is now committed, so they are the committed content and this record verifies on a fresh clone rather than only in this checkout.",
-  "adopted_fixes": [
-    {
-      "name": "tidy-baseline",
-      "from_revision": "a6ad2ea6951c66eb5b7c2eea8757ab8d3311174e",
-      "probe": "probes/tidy-baseline.sh",
-      "adopted_in": "ecf1429"
-    },
-    {
-      "name": "gate-stage-guards",
-      "from_revision": "951608c2675a2f5c2d0b59d9c19c632d23a043af",
-      "probe": "probes/gate-stage-guards.sh",
-      "adopted_in": "1fdc28c"
-    },
-    {
-      "name": "git-index-file",
-      "from_revision": "f9c33005d880df095d7a5ab300d1ec5349c59aea",
-      "probe": "probes/git-index-file.sh",
-      "adopted_in": "8541d27"
-    },
-    {
-      "name": "hook-tiers-agree",
-      "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93",
-      "probe": "probes/hook-tiers-agree.sh",
-      "adopted_in": "d2f81e2"
-    },
-    {
-      "name": "format-checks-staged",
-      "from_revision": "96719c44d7e20816a440bce22a8260bb7e15f639",
-      "probe": "probes/format-checks-staged.sh",
-      "adopted_in": "f996aac"
-    }
-  ],
+  "record_note": "Gate wired by hand on 2026-09-19 (commit 66a5f04, 'plunk in the two-tier gate'), before the kit existed as a git repo, so `revision` is the kit's FIRST PUBLISHED commit and not the exact copy point; the kit's later tidy-baseline fix (t_561f6857) was ported into tools/ci.sh by hand at cbb7248 on 2026-09-20, so this repo already carries the kit's current C++ gate. Every copied artifact is deliberately adapted to Permuto (reasons in the files themselves and in INCIDENTS.md) except .githooks/pre-commit, which is byte-identical. The tidy stage was declined at wiring time and WIRED on 2026-09-20 (b740942) against this repo's own .clang-tidy, so \"this repo does not run tidy\" is no longer true and must not be restored by a sync. NOT a kit copy, and therefore not listed here \u2014 do not let a sync install the template over it: CLAUDE.md is this repo's own contract, last edited 2026-09-08 (6ef5375), i.e. before the kit existed; the kit's templates/CLAUDE.md.template is a placeholder shaped like contracts such as this one. The kit's C++ gate is the only kit artifact this repo uses; the Deno and Python artifacts never applied here. LICENSE is byte-identical to the kit's, but it is not listed: this repo's copy dates to its Initial commit (422bba8, 2025-03-28) and both files are the canonical Unlicense text \u2014 the kit took LICENSE from repos like this one, so there is nothing to sync in either direction. Rule that keeps this file true: any commit that edits a copied artifact must update that artifact's repo_sha256 in the same commit. **2026-09-20, card t_0cc793fb:** the `kitprobes` stage and `tools/kit-probes/tidy-baseline.sh` were taken from the kit at the revision above \u2014 a fix that must propagate ships a probe, and this copy now runs it in its own gate. `revision` moved to that commit because these entries come from it; the earlier entries are still the fb387f2 wiring, and the kit files behind them have not changed between the two commits (the ones that did \u2014 `templates/cpp/ci.sh`, `templates/hooks/pre-push` \u2014 were ported in this same commit). **2026-09-20, later the same day (still card t_0cc793fb):** `revision` moved to 951608c2675a\u2026 for two more artifacts from the kit \u2014 the gate's dispatch guards (a stage that dies or returns non-zero without a verdict can no longer leave a green run; measured on this gate's own `local -a sources`, see INCIDENTS.md) and that fix's own probe `tools/kit-probes/gate-stage-guards.sh`. Between the previous revision and this one the kit changed only `templates/cpp/ci.sh`, `INCIDENTS.md`, `DESIGN-NOTES.md` and the new probe; the entries behind the other files are unchanged by it. **2026-09-20, card t_fb62d8fa:** the record gained the kit's per-fix lists (docs/KIT-REVISION-CONVENTION.md, 'Exact file shape'), so what this copy has and has not taken from the kit is machine-readable instead of prose. `adopted_fixes` names the two probes this copy carries, with the kit revision each fix came from -- and that claim is now CHECKED, not just asserted: the record checker runs each probe against tools/ci.sh, and a claim whose probe is absent or fails is a record failure. `declined_fixes` records the kit's `optimized-build-stage` (probe `probes/optimized-stage.sh`, added by the kit at d531a110) as NOT TAKEN: run against this gate it FAILS (measured 0 ok, 7 failed at this HEAD), and whether this fork takes that stage is parked with Harri. Saying so in the record is the point -- the alternative, moving `revision` to d531a110, would claim this copy was wired from artifacts it never took. **`revision` and every `kit_sha256` are UNCHANGED by this commit**: nothing here came from the kit, and being behind the kit is not a failure -- the check that called it one was measuring whether the kit had moved. **2026-09-20, card t_0a9a0018:** the kit's GIT_INDEX_FILE fix was ported \u2014 kit f9c3300 \u2014 as one line in tools/ci.sh's prologue plus the kit's own probe at tools/kit-probes/git-index-file.sh, and `revision` moved to f9c3300 because this files[] set now takes that probe from it. Nothing else this copy carries changed between the two revisions, so every other entry's `kit_sha256` is untouched; the one that did move is tools/ci.sh's, because the kit's templates/cpp/ci.sh is where the fix landed. Permuto's exposure is stated honestly in the gate's own comment rather than implied: its CMakeLists.txt uses find_package(GTest) and no FetchContent, so no stage of it runs git outside this checkout TODAY. The line is here because the class is general and this copy already contains an instance of it \u2014 tools/kit-probes/ runs git in throwaway repos by design (that is how the kit's probes work). `adopted_fixes` claims the fix and the record checker RUNS the probe against this repo's gate. **2026-10-06, record re-hash:** the checker reported this record BAD on repo_sha256 mismatch for 4 entries, edited after the record was written without this file being updated in the same commit \u2014 the one rule the convention says keeps it true. Re-hashed, no other field changed: tools/ci.sh (last edited 8541d27 2026-09-20 gate: unset GIT_INDEX_FILE in the prologue, and carry the kit's probe for it); .githooks/pre-push (last edited ecf1429 2026-09-20 probes: carry the kit's tidy-baseline probe and run it in this gate (kitprobes)); .ci.env.example (last edited ecf1429 2026-09-20 probes: carry the kit's tidy-baseline probe and run it in this gate (kitprobes)); INCIDENTS.md (last edited 1fdc28c 2026-09-20 gate: the verdict comes from the stages that RAN \u2014 the guard, and its probe). **2026-10-06, second correction:** the re-hash earlier today was taken from the WORKING TREE, which that day carried an uncommitted hardening pass \u2014 fuzz harness, two pointer fixes, three gate stages, the doc rewrite. That work is now committed (92f1180, 2548578, the fuzz and gate commits, and the docs commit after them) and these five artifacts are re-read from the COMMITTED content, so this record verifies on a fresh clone rather than only in this checkout: . **2026-10-06, hook-tier port:** adopted_fixes gains hook-tiers-agree and the revision moves to 919006e, the kit commit that probe is carried from verbatim; per the convention every kit_sha256 here is re-read at that copy point, not just the new file's. tools/ci.sh gained CI_FAST_STAGES/CI_FULL_STAGES and the `fast`/`full` arguments, .githooks/pre-commit and .githooks/pre-push now name a tier instead of repeating a list, and INCIDENTS.md records why. The hashes recorded earlier today were taken from the working tree; the hardening pass they belonged to is now committed, so they are the committed content and this record verifies on a fresh clone rather than only in this checkout. **2026-10-06, card t_6989cec2 (KitCI fleet batch 1 of 3):** the gate is no longer a bash script. tools/ci.sh and the five probes under tools/kit-probes/ are DELETED; the gate is now the tracked gate.toml (twelve stages, tiers fast/full) run by kit-ci - the KitCI repo's C++ engine, installed once per machine (cmake --install build --prefix ~/.local) - plus scripts/gate-env.sh, scripts/gate.sh and twelve stage scripts, all of them this repo's own files rather than kit copies, which is why none of them appears in files[] below. Five things the next sync card has to read before it does anything. (1) files[] loses tools/ci.sh - the fork of templates/cpp/ci.sh whose repo_sha256 at this revision was 50a8d713fc15f09fa38254001e354b2fe1c0457ab868146e6bad47ebfa89a2a4 - and the five tools/kit-probes/*.sh entries: the artifacts are gone, so no hash can describe them. (2) The five kit fixes those probes guarded (tidy-baseline, gate-stage-guards, git-index-file, hook-tiers-agree, format-checks-staged) move from adopted_fixes to declined_fixes - NOT because the fixes were declined, but because the artifact they CHECK no longer exists: each probe greps or sources the bash gate it was written for, and measured against the new entry point (scripts/gate.sh) they read 2 green / 3 red, where both greens are accidents of how those two probes search rather than measurements of the new gate. The CONTRACTS did not go: tidy_key() lives in scripts/gate-env.sh (applied to both sides in scripts/tidy.sh and used by scripts/write-tidy-baseline.sh), the staged-copy check in scripts/format.sh, unset GIT_INDEX_FILE in scripts/gate.sh and scripts/gate-env.sh, the tier lists in gate.toml (named by the hooks, printed by kit-ci --list), and gate-stage-guards is subsumed by the engine's runner, which fails any stage whose command does not exit 0. INCIDENTS.md carries the same index, entry by entry. (3) Two kit-copied files are RE-HASHED because this commit edits them: .githooks/pre-commit and .githooks/pre-push now NAME a tier (--tier fast, and --tier full with CI_REQUIRE_CLEAN=1, which is the old --require-clean flag moved into the environment), and their branch for a repo's own tools/ci.sh is gone with that file; .ci.env.example keeps documenting the same knobs against the new layout and records that CI_STRICT_TOOLS has no equivalent in the engine. (4) revision and every other entry in this record are UNCHANGED: nothing here came from the kit, and being behind the kit is not a failure - the check that called it one was measuring whether the kit had moved. (5) One more capability has no equivalent, and it is the one a human notices first: kit-ci runs TIERS and has NO stage-selection option, so naming stages on the command line (the old tools/ci.sh fuzz) is gone - run the stage's script directly instead, e.g. CI_FUZZ_SECONDS=1800 scripts/fuzz.sh, which is what gate.toml's own note says. The scripts take no arguments and read the same environment, so that is the same run the stage would make.",
   "declined_fixes": [
     {
       "name": "optimized-build-stage",
       "from_revision": "d531a110184125ed108c3eabc36834bb803404bb",
       "probe": "probes/optimized-stage.sh",
       "why": "not taken: whether this fork takes the kit's second-configuration stage is parked with Harri (2026-09-20). Measured here -- the kit's own probe FAILS against tools/ci.sh (0 ok, 7 failed), because every stage of this gate builds Debug."
+    },
+    {
+      "name": "tidy-baseline",
+      "from_revision": "a6ad2ea6951c66eb5b7c2eea8757ab8d3311174e",
+      "probe": "probes/tidy-baseline.sh",
+      "why": "not applicable: tidy-baseline guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it - the gate is gate.toml (twelve stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED (the normaliser is no longer in the gate file it greps), and all five were GREEN against tools/ci.sh immediately before the conversion. The contract it held did not go - see the 2026-10-06 paragraph in record_note and the two entries in INCIDENTS.md for where each one lives now."
+    },
+    {
+      "name": "gate-stage-guards",
+      "from_revision": "951608c2675a2f5c2d0b59d9c19c632d23a043af",
+      "probe": "probes/gate-stage-guards.sh",
+      "why": "not applicable: gate-stage-guards guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it - the gate is gate.toml (twelve stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED (the guard functions and the dispatch loop are gone), and all five were GREEN against tools/ci.sh immediately before the conversion. The contract it held did not go - see the 2026-10-06 paragraph in record_note and the two entries in INCIDENTS.md for where each one lives now."
+    },
+    {
+      "name": "git-index-file",
+      "from_revision": "f9c33005d880df095d7a5ab300d1ec5349c59aea",
+      "probe": "probes/git-index-file.sh",
+      "why": "not applicable: git-index-file guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it - the gate is gate.toml (twelve stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN (accidental: unset GIT_INDEX_FILE is in scripts/gate.sh, which the probe happens to read, so it passes without checking the class), and all five were GREEN against tools/ci.sh immediately before the conversion. The contract it held did not go - see the 2026-10-06 paragraph in record_note and the two entries in INCIDENTS.md for where each one lives now."
+    },
+    {
+      "name": "hook-tiers-agree",
+      "from_revision": "919006ecf90cfcc7627e008c6bee165754962d93",
+      "probe": "probes/hook-tiers-agree.sh",
+      "why": "not applicable: hook-tiers-agree guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it - the gate is gate.toml (twelve stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads RED (CI_FAST_STAGES/CI_FULL_STAGES are no longer in a gate file), and all five were GREEN against tools/ci.sh immediately before the conversion. The contract it held did not go - see the 2026-10-06 paragraph in record_note and the two entries in INCIDENTS.md for where each one lives now."
+    },
+    {
+      "name": "format-checks-staged",
+      "from_revision": "96719c44d7e20816a440bce22a8260bb7e15f639",
+      "probe": "probes/format-checks-staged.sh",
+      "why": "not applicable: format-checks-staged guards the kit's templates/cpp/ci.sh, and this repo no longer carries a fork of it - the gate is gate.toml (twelve stages) run by kit-ci, and the probe is written against the shape of a single bash gate file, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN (accidental: the probe finds the staged-copy code by searching the tree, not the file it was handed), and all five were GREEN against tools/ci.sh immediately before the conversion. The contract it held did not go - see the 2026-10-06 paragraph in record_note and the two entries in INCIDENTS.md for where each one lives now."
     }
   ],
   "files": [
     {
-      "repo_path": "tools/ci.sh",
-      "kit_path": "templates/cpp/ci.sh",
-      "repo_sha256": "50a8d713fc15f09fa38254001e354b2fe1c0457ab868146e6bad47ebfa89a2a4",
-      "kit_sha256": "b50a5a82b13464932cea058b5b5eca5a93c2474f2a089fea82392271d12db018",
-      "adapted": true,
-      "adapted_why": "Adapted for this repo; every deviation from the kit is listed in the PERMUTO ADAPTATIONS block at the top of the file: `tidy` runs against this repo's own .clang-tidy (the bug-finding subset \u2014 clang-diagnostic-* + clang-analyzer-*, 0 findings, 104-201 s; the two heavier rule sets and why they were rejected are in INCIDENTS.md), stage_version also compares the generated $CI_BUILD_DIR/*ConfigVersion.cmake (a third copy of the version number no kit stage looks at), Permuto's own defaults (CI_VERSION_BINARIES, CI_DEFAULT_STAGES) are set by plain assignment after the kit's block, and --help derives its header range from the PERMUTO ADAPTATIONS marker because the kit's first-blank-line rule would cut the local notes off. The only byte difference that is NOT a Permuto decision is a literal newline inside one printf format string in write_tidy_baseline() (output-identical; all four ports of the 2026-09-20 tidy-baseline fix carry it). The kit's tidy-baseline fix itself (tidy_key on both operands + --write-tidy-baseline) was ported in here by cbb7248, so this copy is not lagging the kit. **2026-09-20, card t_0a9a0018:** the prologue gained `unset GIT_INDEX_FILE` \u2014 the kit's own line now (kit f9c3300), with the mechanism and the measurement in the comment above it: git exports its TEMPORARY index to the pre-commit hook for a `git commit -- <path>`, and any `git` command this gate runs inside ANOTHER repository then reads this repo's index entries against that repository's object store and dies on the first blob it does not have. Permuto's exposure is stated honestly in the gate's own comment rather than implied: its CMakeLists.txt uses find_package(GTest) and no FetchContent, so no stage of it runs git outside this checkout TODAY. The line is here because the class is general and this copy already contains an instance of it \u2014 tools/kit-probes/ runs git in throwaway repos by design (that is how the kit's probes work)."
-    },
-    {
       "repo_path": ".githooks/pre-commit",
       "kit_path": "templates/hooks/pre-commit",
-      "repo_sha256": "295605dd9f3ca555a347b1013a8c165156bd32d366e284082691137f0b8800cb",
+      "repo_sha256": "3136f92aeba57309ab485be1638834089d04039734940feb04ebdeb880ec049d",
       "kit_sha256": "c87ea669b3716917a8de098697107b2afe867fbbdd519d5db68ce077f24e445e",
       "adapted": true,
-      "adapted_why": "the port gives the commit hook the fast tier's NAME instead of the kit's explicit stage list, so editing this file no longer requires editing the gate's list too (and the reverse). The kit ships the explicit list on purpose; measured across this fleet, that spelling is the one that goes stale -- the hooks that spelled a list are exactly the ones that fell behind their gate."
+      "adapted_why": "the port gives the commit hook the fast tier's NAME instead of the kit's explicit stage list, so editing this file no longer requires editing the gate's list too (and the reverse). The kit ships the explicit list on purpose; measured across this fleet, that spelling is the one that goes stale -- the hooks that spelled a list are exactly the ones that fell behind their gate. **2026-10-06, card t_6989cec2:** the gate's stage list moved into gate.toml, so this hook names a tier (--tier fast) for scripts/gate.sh, and the kit branch that exec'd a repo's own tools/ci.sh went with that file."
     },
     {
       "repo_path": ".githooks/pre-push",
       "kit_path": "templates/hooks/pre-push",
-      "repo_sha256": "4f1f920d2f24d56e61e43946130bb63f637d9e9a925e52eddd3d28a2cd1d9b75",
+      "repo_sha256": "8f941e9e2dacad7871013c68ecac19bc785870df1dd0e32bfad4bf649ed04667",
       "kit_sha256": "ad7380d39fc6c425d2ced5972be828832f704d395fbd17d3676768bfa33dcf10",
       "adapted": true,
-      "adapted_why": "The stage list is the kit's own verbatim (--require-clean tree format kitprobes build tests version asan tsan tidy pristine); the only difference is the nine-line PERMUTO comment above the exec, which records what `tidy` certifies here (.clang-tidy's bug-finding subset) and where the clean-tree check lived while the `tree` stage could not pass."
+      "adapted_why": "The stage list is the kit's own verbatim (--require-clean tree format kitprobes build tests version asan tsan tidy pristine); the only difference is the nine-line PERMUTO comment above the exec, which records what `tidy` certifies here (.clang-tidy's bug-finding subset) and where the clean-tree check lived while the `tree` stage could not pass. **2026-10-06, card t_6989cec2:** the stage list moved into gate.toml, so this hook names the full tier and sets CI_REQUIRE_CLEAN=1 - the old --require-clean flag, moved into the environment because kit-ci's vocabulary has no per-run flags. Its kit branch for tools/ci.sh went with that file, and so did the kitprobes stage (see record_note)."
     },
     {
       "repo_path": ".ci.env.example",
       "kit_path": "templates/cpp/.ci.env.example",
-      "repo_sha256": "afaef1554dfa0a92daaee73b77992b65a0b76f48af8ef84ade9a76fa3b03f06c",
+      "repo_sha256": "8be411aa05af68a10db0551f5c9794bd9b61881bb4c69ccdfaa4b430063024ba",
       "kit_sha256": "eee5264aaa1b120fcd76685879559aae15bbf0fe39c45cfb0c4726d026709556",
       "adapted": true,
-      "adapted_why": "Permuto's real config: CI_DEFAULT_STAGES spelled out with tidy included, CI_VERSION_BINARIES=$CI_BUILD_DIR/permuto, the note that the third version copy (the generated *ConfigVersion.cmake) deliberately has no knob, the kit's optional CI_ASAN_TEST_CMD example block absent (nothing here filters the suite under a sanitizer: `grep -rn GTEST_FILTER tests/ .ci.env.example` finds nothing, and there is no RSS-measuring or wall-clock test), and a PERMUTO NOTES section at the end recording what is wired, the rule set `tidy` runs and the two heavier rule sets rejected with their measured numbers."
+      "adapted_why": "Permuto's real config: CI_DEFAULT_STAGES spelled out with tidy included, CI_VERSION_BINARIES=$CI_BUILD_DIR/permuto, the note that the third version copy (the generated *ConfigVersion.cmake) deliberately has no knob, the kit's optional CI_ASAN_TEST_CMD example block absent (nothing here filters the suite under a sanitizer: `grep -rn GTEST_FILTER tests/ .ci.env.example` finds nothing, and there is no RSS-measuring or wall-clock test), and a PERMUTO NOTES section at the end recording what is wired, the rule set `tidy` runs and the two heavier rule sets rejected with their measured numbers. **2026-10-06, card t_6989cec2:** rewritten for the gate.toml layout - every knob keeps its default, but the defaults now live in scripts/gate-env.sh and the stage list in gate.toml. The tidy-baseline recipe points at scripts/write-tidy-baseline.sh (the old --write-tidy-baseline mode), and CI_STRICT_TOOLS is recorded as having NO equivalent: kit-ci skips a stage by its own rule, when = 'tool:<name>', and no key turns that skip into a failure."
     },
     {
       "repo_path": "INCIDENTS.md",
       "kit_path": "INCIDENTS.md",
-      "repo_sha256": "ef4b0da4d004cb330ef6e337ec66b45a048ba3fe72b1be0ba7f9e0209c91be7c",
+      "repo_sha256": "d131d10e5f80d3dab26c00de30787f3717c26cc9fc9f7aeba5b4d537703b1c93",
       "kit_sha256": "e6e636dbdd3e26c727aff5045c8d50427d79c41011b0c6ace1172e76ca099e0f",
       "adapted": true,
       "adapted_why": "Seeded from the kit's rule block (the first 15 lines are byte-identical to the kit's) and then filled with THIS repo's entries \u2014 seven at record time, including one marked SUPERSEDED. The kit's own entries are deliberately not copied, so a sync must never overwrite this file with the kit's."
-    },
-    {
-      "repo_path": "tools/kit-probes/tidy-baseline.sh",
-      "kit_path": "probes/tidy-baseline.sh",
-      "repo_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
-      "kit_sha256": "efd9bbca108bb7bd1e527d95d09546c1b3bceca451054367b2fed6f92bfc6379",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/gate-stage-guards.sh",
-      "kit_path": "probes/gate-stage-guards.sh",
-      "repo_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
-      "kit_sha256": "0a9f752c5081d6cc61b0f478ebee356d1358c7aca9562643411249901178be86",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/git-index-file.sh",
-      "kit_path": "probes/git-index-file.sh",
-      "repo_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
-      "kit_sha256": "6818e5d5b049edc250dc5b7cd1e620917cf80afef0bbade83b8cbb690ddc27e6",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/hook-tiers-agree.sh",
-      "kit_path": "probes/hook-tiers-agree.sh",
-      "repo_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
-      "kit_sha256": "736481101f4b9b4ce4379048c0be9c165b883ba7e27b424b3864aa32725564d1",
-      "adapted": false
-    },
-    {
-      "repo_path": "tools/kit-probes/format-checks-staged.sh",
-      "kit_path": "probes/format-checks-staged.sh",
-      "repo_sha256": "513e9231c31cbc9cb2faa0576fcbc7459f75967b79654825ffc8a648ab29c657",
-      "adapted": false
     }
   ]
 }

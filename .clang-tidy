@@ -1,4 +1,4 @@
-# clang-tidy configuration — what the `tidy` stage of tools/ci.sh enforces.
+# clang-tidy configuration — what the `tidy` stage (scripts/tidy.sh, declared in gate.toml) enforces.
 #
 # THE BUG-FINDING SUBSET, written down explicitly instead of being left to the tool's
 # default. `clang-diagnostic-*` is the compiler diagnostics clang-tidy sees while it parses;
@@ -27,7 +27,7 @@
 #
 # There is no baseline file, on purpose: with the check set below this tree is clean, and a
 # baseline tolerates findings you inherited — it does not bless a rule set. If a finding ever
-# does have to be accepted, accept it through the gate (`tools/ci.sh --write-tidy-baseline`),
+# does have to be accepted, accept it through the gate (`scripts/write-tidy-baseline.sh`),
 # never by hand.
 Checks: 'clang-diagnostic-*,clang-analyzer-*'
 

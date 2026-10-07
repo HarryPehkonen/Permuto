@@ -44,8 +44,8 @@ Reference: https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
 
 ## Definition of done (agent checklist)
 
-- [ ] `bash tools/ci.sh --require-clean` prints `GATE PASSED` (that one command runs
-      every check below, in the order the push gate runs them)
+- [ ] `CI_REQUIRE_CLEAN=1 scripts/gate.sh` prints `GATE PASSED` (that one command runs
+      every check below, in the order the push gate runs them; gate.toml is the list)
 - [ ] Zero-warning build (see Tooling status — `-Werror` where wired)
 - [ ] All tests pass
 - [ ] Tests pass under ASan+UBSan
@@ -55,14 +55,18 @@ Reference: https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
 - [ ] No raw owning pointers / `new` / `reinterpret_cast` introduced
 - [ ] Test written first (RED) for every behavior change or bug fix
 
-## Tooling status (this repo, as of 2026-09-20)
+## Tooling status (this repo, as of 2026-10-06)
 
-Everything below is wired into `tools/ci.sh`, which is what `.githooks/pre-commit` (fast
-tier: `build tests`) and `.githooks/pre-push` (full tier) run. Run it by hand at any time:
+Everything below is wired into `gate.toml` — the stage list, the tiers and the failure rules —
+which `kit-ci` runs; kit-ci is the engine, installed once per machine (`cmake --install build
+--prefix ~/.local` in the KitCI repo). `.githooks/pre-commit` names the fast tier
+(`format build tests`) and `.githooks/pre-push` the full one with `CI_REQUIRE_CLEAN=1`. Run it
+by hand at any time:
 
-    bash tools/ci.sh                  # the whole gate, in order
-    bash tools/ci.sh --list           # the stages and the effective default list
-    bash tools/ci.sh --require-clean  # ...and fail on an uncommitted tracked file
+    scripts/gate.sh                    # the full tier: every stage, in order
+    kit-ci --list                      # the stages and the tiers, read from gate.toml
+    scripts/gate.sh --tier fast        # what a commit runs
+    CI_REQUIRE_CLEAN=1 scripts/gate.sh # ...and fail on an uncommitted tracked file
 
 - **Formatting:** `.clang-format` (the suite file: LLVM base, 4-space, 100 columns) and
   the `format` stage — every file a branch touches must conform. Fix a file with
@@ -125,10 +129,11 @@ tier: `build tests`) and `.githooks/pre-push` (full tier) run. Run it by hand at
   (~104-201 s against ~37-66 s; the whole 9-stage gate ran in 141 s with warm caches), paid on
   push only — the fast tier is still `build tests` — and it is the cheapest tidy in the suite.
   Reasons, and the set the earlier "tidy is absent" decision was measured against:
-  `INCIDENTS.md`, `.ci.env.example`, and the adaptation notes at the top of `tools/ci.sh`.
+  `INCIDENTS.md`, `.ci.env.example`, and the notes at the top of `gate.toml` and in
+  `scripts/gate-env.sh`.
 - **Never weaken a stage to make it pass; a gate that fails open is the thing this tooling
-  exists to prevent.** Every deviation from the AI-DEV-STARTER kit is listed in the
-  adaptation notes at the top of `tools/ci.sh` with its reason, and every rule change gets
+  exists to prevent.** Every deviation from the AI-DEV-STARTER kit is listed in `gate.toml`'s
+  closing notes and in `scripts/gate-env.sh`, with its reason, and every rule change gets
   an entry in `INCIDENTS.md` next to the check that enforces it.
 
 ## Upstream reference

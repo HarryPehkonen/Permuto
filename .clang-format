@@ -4,8 +4,8 @@
 # carry the same rules plus a trailing YAML document-end marker (`...`).
 #
 # Added 2026-09-20: CODING_STANDARDS.md said "clang-format per the repo's .clang-format"
-# and this repo had no such file, so the format gate (tools/ci.sh, stage `format`) could
-# not run at all. The tree was formatted with this file in one mechanical commit
+# and this repo had no such file, so the format gate (the `format` stage, scripts/format.sh)
+# could not run at all. The tree was formatted with this file in one mechanical commit
 # ("style: ..."), then the stage was wired. See INCIDENTS.md.
 #
 # Verify it is still the suite file, from this repo:

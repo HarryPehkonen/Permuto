@@ -4,15 +4,15 @@
 # preference: this repo used to carry its build/ tree in git (130 of its 169 tracked
 # files were CMake output), which means a clone could not be trusted to build from
 # source and the gate's own `tree` stage failed on it. The 2026-09-20 commit stopped
-# tracking build/ and wired that stage into tools/ci.sh; the reason is in INCIDENTS.md.
-# If build/ ever comes back as a tracked path, `tools/ci.sh tree` fails.
+# tracking build/ and wired that stage into the gate; the reason is in INCIDENTS.md.
+# If build/ ever comes back as a tracked path, the `tree` stage fails.
 
 # --- build output (the gate builds in build/, build-asan/, build-tsan/) ---
 build/
 build-*/
 out/
 
-# --- the gate's own footprint (tools/ci.sh) ---
+# --- the gate's own footprint (the tree stage fails on any of these showing up as untracked) ---
 .ci-logs/
 .ci.env
 # The fuzz stage's corpus: libFuzzer writes every interesting input and every crash

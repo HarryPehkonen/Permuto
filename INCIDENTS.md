@@ -14,6 +14,96 @@ arbitrary checks get deleted. The rationale is the load-bearing part.
 
 ---
 
+## 2026-10-06 — the 1087-line gate became gate.toml, run by kit-ci
+
+What broke:        Not a break — a conversion with a measured cost, written down because the
+                   alternative is a reader discovering it. `tools/ci.sh` (1087 lines, thirteen
+                   stages, its own summary, its own `--help`) is gone. The gate is now
+                   `gate.toml` — twelve stages, tiers `fast`/`full` — run by `kit-ci`, plus the
+                   `scripts/*.sh` the policy names, which are the old stage bodies. Three
+                   things MOVED rather than disappeared, a fourth lost a switch the engine has
+                   no word for, and one did not survive:
+                   * `--require-clean` was a FLAG, and kit-ci's vocabulary has no per-run
+                     flags. The rule is unchanged and still push-only, but its caller now sets
+                     `CI_REQUIRE_CLEAN=1` in the environment and `scripts/tree.sh` reads it. A
+                     hand run still works on a dirty tree, exactly as before.
+                   * `--write-tidy-baseline` was a MODE of the script. It is now
+                     `scripts/write-tidy-baseline.sh`, which runs the real build and tidy stages
+                     and captures the same file through the same `tidy_key()`.
+                   * NAMING STAGES on the command line (`tools/ci.sh fuzz`) has NO equivalent:
+                     kit-ci runs TIERS and has no stage-selection option at all (`--help` lists
+                     `--tier`, `--gate`, `--list`, `--graph`, `--strict` — and nothing else).
+                     The translation is to run that stage's script directly, which is what
+                     gate.toml's own note now says for a long fuzz campaign:
+                     `CI_FUZZ_SECONDS=1800 scripts/fuzz.sh`. The scripts take no arguments and
+                     read the same environment, so this is the same run the stage would make.
+                   * `CI_STRICT_TOOLS` (a missing clang-format/clang-tidy/clang++ FAILS instead
+                     of skipping) has NO equivalent either: kit-ci skips by its own rule,
+                     `when = "tool:<name>"` in gate.toml, and no key turns a skip into a
+                     failure. Its default was 0, so the default behaviour is preserved; a
+                     machine that wanted the switch loud loses it.
+                   * The `kitprobes` stage did not survive — it is the next entry.
+                   Two differences come from the engine and are worth knowing: kit-ci runs
+                   EVERY stage and reports every failure, where the old script stopped at the
+                   first one; and it prints the first 40 lines of a FAILED stage's output, but
+                   nothing from a stage that passed — the old summary echoed each stage's own
+                   count line (ctest's "100% tests passed"). Those lines are still written to
+                   `.ci-logs/` by the stage scripts.
+Check added:       `gate.toml` + `scripts/` (twelve stages, two tiers) and the two hooks, which
+                   now NAME a tier instead of repeating a stage list. Every guarantee the old
+                   script carried is held verbatim by the stage script that inherited it: the
+                   staged-copy format check, the tidy baseline normaliser, the fuzz seed smoke
+                   with its non-zero identity-check guard, the version stage's four copies of
+                   the number, the compile-database coverage check, the tree footprint audit,
+                   and the pristine clean-checkout proof.
+Why it must stay:  A policy file that `kit-ci --list` reads is one diff away from saying what
+                   the gate runs; the old arrangement kept the stage list in the script, a
+                   second copy in the pre-push hook, and nothing compared them except a probe.
+                   The three moved things each have exactly one caller now — which is why
+                   each is recorded with its name.
+
+---
+
+## 2026-10-06 — the kit probes checked a file that no longer exists
+
+What broke:        Measured, not argued. The kit's five probes are written against the shape of a
+                   single bash gate file: each greps it (`stage_format()`, `CI_FAST_STAGES`,
+                   `unset GIT_INDEX_FILE`) or SOURCES its environment block. All five were
+                   GREEN against `tools/ci.sh` immediately before the conversion (`bash
+                   tools/kit-probes/<probe>.sh tools/ci.sh .` exit 0, re-measured today). Run
+                   after the conversion against the new entry point `scripts/gate.sh`:
+                   `format-checks-staged` GREEN, `git-index-file` GREEN, `gate-stage-guards`
+                   RED, `hook-tiers-agree` RED, `tidy-baseline` RED — and both GREENs are
+                   accidents of how those two probes SEARCH, not measurements of the new gate.
+                   A `kitprobes` stage whose verdict is accidental is the exact failure mode
+                   this file exists for, so the stage and the five scripts are deleted rather
+                   than kept as decoration.
+Check added:       The five CONTRACTS are held in their new homes, and this entry is their index:
+                   * `tidy-baseline`        -> `tidy_key()` in `scripts/gate-env.sh`, applied to
+                                               both sides in `scripts/tidy.sh` and by
+                                               `scripts/write-tidy-baseline.sh`
+                   * `format-checks-staged` -> the staged-copy block in `scripts/format.sh`
+                   * `git-index-file`       -> `unset GIT_INDEX_FILE` in `scripts/gate.sh` and
+                                               `scripts/gate-env.sh` (both entry points, so a
+                                               stage that sources neither is still covered)
+                   * `hook-tiers-agree`     -> `[tier.fast]`/`[tier.full]` in `gate.toml`, named
+                                               by `.githooks/pre-commit` and `.githooks/pre-push`,
+                                               printed by `kit-ci --list`
+                   * `gate-stage-guards`    -> kit-ci's own runner: it executes each declared
+                                               stage and fails any command that does not exit 0,
+                                               so a stage can no longer die silently behind a
+                                               "GATE PASSED" line.
+                   `.ai-dev-starter.json` says the same thing in its own words: the five are now
+                   `declined_fixes` — not applicable, because the artifact they guarded (this
+                   repo's fork of `templates/cpp/ci.sh`) is gone. That is the same statement
+                   docsum's record carries for its own KitCI conversion.
+Why it must stay:  The next sync card will see five probes in the kit and no copy here. Without
+                   this entry and the record's five `declined_fixes` entries, the choice reads
+                   as lag rather than as a decision; with them, the question is answered where
+                   the convention says to answer it.
+
+---
+
 ## 2026-10-06 — the pre-push hook carried its own copy of the stage list
 
 What broke:        `.githooks/pre-push` named all thirteen stages, and so did `CI_DEFAULT_STAGES` in
