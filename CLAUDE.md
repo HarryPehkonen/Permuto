@@ -9,7 +9,8 @@ Permuto is a C++17 library for JSON template processing: values from a context d
 substituted into a JSON template through `${<json-pointer>}` placeholders, and the reverse
 direction reconstructs the context from a processed result. The library, the CLI, the
 examples, the suite and a local gate all exist and run — there is no plan phase left, and no
-phase list in this file. `tools/ci.sh` is the single definition of "done".
+phase list in this file. `gate.toml`, run by `kit-ci`, is the single definition of
+"done".
 
 Public API (`include/permuto/permuto.hpp`, `nlohmann::json` in and out):
 
@@ -38,8 +39,10 @@ cli/main.cpp                  the `permuto` command-line tool
 tests/                        GoogleTest suite, registered with ctest
 fuzz/                         libFuzzer harness, seeds, regressions, make_seeds.py
 examples/                     api_example, mixed_mode_example, multi_stage_example
-tools/ci.sh                   the gate: every check this repo has, in one script
-.githooks/                    pre-commit and pre-push, both call tools/ci.sh
+gate.toml                     the gate's policy: which stages exist, which tier runs them
+scripts/                      one script per stage, plus scripts/gate.sh (the entry point)
+.githooks/                    pre-commit and pre-push, both NAME a tier and call
+                              scripts/gate.sh
 cmake/                        version.hpp.in, PermutoConfig.cmake.in
 ```
 
@@ -60,22 +63,25 @@ Options: `PERMUTO_BUILD_TESTS` (ON), `PERMUTO_BUILD_EXAMPLES` (ON), `PERMUTO_BUI
 
 ## The gate
 
-`tools/ci.sh` is the only thing that may be called "the gate passed". It is offline,
-non-destructive (it commits, stages, reverts and reformats nothing) and runs thirteen stages
+`scripts/gate.sh` — `kit-ci` reading `gate.toml` — is the only thing that may be called
+"the gate passed". It is offline,
+non-destructive (it commits, stages, reverts and reformats nothing) and runs twelve stages
 in this order:
 
-`tree docs format kitprobes build tests version asan tsan fuzz tidy pristine package`
+`tree docs format build tests version asan tsan fuzz tidy pristine package`
 
-- `tree` — every file is committed or ignored; `.gitignore` audit; `--require-clean` also
-  fails on uncommitted edits to tracked files.
+- `tree` — every file is committed or ignored; `.gitignore` audit; `CI_REQUIRE_CLEAN=1`
+  (which is what `.githooks/pre-push` exports) also fails on uncommitted edits to tracked
+  files.
 - `docs` — no document listed in `CI_DOCS_FILES` (`README.md`, this file,
   `CODING_STANDARDS.md`, `TECHNICAL_DETAILS.md`, `REQUIREMENTS.md`) may quote a count of the
   suite. Describe what is covered instead. `INCIDENTS.md` is exempt: its numbers are dated
   measurements of past events. Beware that the pattern is deliberately broad — a digit
   earlier on the same line as the word "test" can trip it even when nothing is being counted.
 - `format` — clang-format dry run over the files this branch touches.
-- `kitprobes` — `tools/kit-probes/*` hold this copy to the AI-DEV-STARTER fixes it claims to
-  carry, by name and by behaviour.
+- `kitprobes` — REMOVED, 2026-10-06. The probes checked the old `tools/ci.sh`, and the KitCI
+  conversion deleted that file; each guarantee they held has a named home in
+  `INCIDENTS.md`, entry by entry.
 - `build` — configure plus build, zero warnings.
 - `tests` — the suite, every failure reported.
 - `version` — `project(VERSION)`, the generated header, the CMake package-version file and
@@ -98,13 +104,13 @@ Hooks (`git config core.hooksPath .githooks`, once per clone):
 plus `--require-clean`.
 
 Configuration: `.ci.env` (gitignored, optional, documented knob by knob in `.ci.env.example`).
-Every knob has a default in the script, so the repo works with no config at all. Stage logs
+Every knob has a default in `scripts/gate-env.sh`, so the repo works with no config at all. Stage logs
 land in `.ci-logs/`. Build type is Debug for every stage that builds the library, except
 `fuzz`, which builds RelWithDebInfo because an unoptimised harness buys far less exploration
 per second. The kit's optimized-build (`release`) stage is deliberately NOT taken here.
 
-**Every deviation from the AI-DEV-STARTER kit is listed in the adaptation block at the top of
-`tools/ci.sh`, with its reason. Every rule change has an entry in `INCIDENTS.md`.** Read that
+**Every deviation from the AI-DEV-STARTER kit is recorded in the notes at the top of
+`gate.toml`, with its reason. Every rule change has an entry in `INCIDENTS.md`.** Read that
 file before "simplifying" anything in the gate: what looks redundant there is usually a fix
 for something that failed silently.
 
@@ -140,7 +146,7 @@ bug cannot come back unnoticed, and they carry input shapes the seeds do not. Wh
 reports a finding, the reproducer becomes a regression file and a unit test.
 
 `CI_FUZZ_SECONDS` defaults to ten — a **regression budget** for a push prompt, not a campaign.
-Rare shapes need longer: run `CI_FUZZ_SECONDS=1800 tools/ci.sh fuzz` (or the binary directly)
+Rare shapes need longer: run `CI_FUZZ_SECONDS=1800 scripts/fuzz.sh` (or the binary directly)
 out of band, against the same corpus. Do not raise the gate's budget to chase one.
 
 The harness is compiled in the default (non-fuzzing, gcc) build too, as an object library that
@@ -196,8 +202,8 @@ compilers and free of libFuzzer-only headers.
 2. **`CODING_STANDARDS.md` is mandatory**: modern C++17 in the spirit of the C++ Core
    Guidelines (Type/Bounds/Lifetime profiles), exceptions allowed for error handling. No raw
    owning pointers, no `new`/`delete`, no `reinterpret_cast` or C-style casts.
-3. **One gate command**: `tools/ci.sh` must print `GATE PASSED`. Add `--require-clean` when
-   the work is committed (that is what `pre-push` does).
+3. **One gate command**: `scripts/gate.sh` must print `GATE PASSED`. Set
+   `CI_REQUIRE_CLEAN=1` when the work is committed (that is what `pre-push` does).
 4. **Never weaken a stage to make it pass** — no loosened flags, no shortened lists, no
    skipped check. If a build fails on a pre-existing warning, fix the warning with a small,
    targeted change. A gate that fails open is the thing this tooling exists to prevent.
